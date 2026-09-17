@@ -1,0 +1,41 @@
+{
+  "name": "cerebra",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "A multi-agent decision court with explicit majority and dissent reports.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/src/index.js",
+    "build": "tsc -p tsconfig.json",
+    "db:migrate": "tsx src/storage/migrate.ts",
+    "frontend:install": "npm --prefix frontend install",
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:build": "npm --prefix frontend run build",
+    "frontend:check": "npm --prefix frontend run check",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/**/*.test.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.56",
+    "@ai-sdk/openai-compatible": "^3.0.51",
+    "@bitget-ai/bitget-agent-sdk": "^3.3.0",
+    "@modelcontextprotocol/fastify": "^2.0.0",
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "ai": "^7.0.105",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.12.5",
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.3",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
