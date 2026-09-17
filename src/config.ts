@@ -7,6 +7,9 @@ const configSchema = z.object({
   AI_PROVIDER: z.enum(["mock", "qwen", "claude"]).default("mock"),
   EVIDENCE_PROVIDER: z.enum(["mock", "bitget"]).default("bitget"),
   STORAGE_DRIVER: z.enum(["memory", "postgres"]).default("memory"),
+  AGENT_AUTH_MODE: z.enum(["open", "agent-key"]).default("open"),
+  AGENT_API_KEY_PEPPER: z.string().min(32).optional(),
+  AGENT_REGISTRATION_TOKEN: z.string().min(32).optional(),
   DATABASE_URL: z.string().min(1).optional(),
   DATABASE_SSL: z.string().default("false").transform((value) => value === "true"),
   QWEN_API_KEY: z.string().min(1).optional(),
@@ -22,6 +25,14 @@ const configSchema = z.object({
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const parsed = configSchema.parse(env);
+  if (parsed.AGENT_AUTH_MODE === "agent-key") {
+    if (!parsed.AGENT_API_KEY_PEPPER) {
+      throw new Error("AGENT_API_KEY_PEPPER is required when AGENT_AUTH_MODE=agent-key");
+    }
+    if (!parsed.AGENT_REGISTRATION_TOKEN) {
+      throw new Error("AGENT_REGISTRATION_TOKEN is required when AGENT_AUTH_MODE=agent-key");
+    }
+  }
   return {
     host: parsed.HOST,
     port: parsed.PORT,
@@ -43,6 +54,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       driver: parsed.STORAGE_DRIVER,
       databaseUrl: parsed.DATABASE_URL,
       databaseSsl: parsed.DATABASE_SSL,
+    },
+    auth: {
+      mode: parsed.AGENT_AUTH_MODE,
+      apiKeyPepper: parsed.AGENT_API_KEY_PEPPER ?? "development-only-cerebra-key-pepper",
+      registrationToken: parsed.AGENT_REGISTRATION_TOKEN,
     },
   };
 }

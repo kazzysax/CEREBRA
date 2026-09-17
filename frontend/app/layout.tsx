@@ -14,17 +14,17 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://cerebra-decision-court.web3kingley.chatgpt.site'),
-  title: 'Cerebra — Multi-agent decision court',
-  description: 'Convene an evidence-bound AI court and inspect every vote, rationale, and dissent.',
+  title: 'Cerebra — The decision court for stock intelligence',
+  description: 'Stress-test tokenized U.S. stock and digital-asset theses with Bitget market intelligence, an Analyst, a Challenger, and three independent judges.',
   openGraph: {
-    title: 'Cerebra — Multi-agent decision court',
-    description: 'Every decision. Every vote. Every dissent.',
-    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Cerebra multi-agent decision court' }],
+    title: 'Cerebra — Put every trade idea on trial',
+    description: 'An AI Trading Desk for evidence-bound stock research, adversarial challenge, independent judgment, and visible dissent.',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Cerebra stock decision court' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Cerebra — Multi-agent decision court',
-    description: 'Every decision. Every vote. Every dissent.',
+    title: 'Cerebra — Put every trade idea on trial',
+    description: 'Stock intelligence enters. Arguments collide. Three judges rule. You make the final call.',
     images: ['/og.png'],
   },
 };
@@ -36,9 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
       </body>
     </html>

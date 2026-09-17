@@ -20,6 +20,7 @@ function iso(value: unknown): string {
 function caseFromRow(row: Row): CaseRecord {
   return {
     id: String(row.id),
+    agentId: row.agent_id === null || row.agent_id === undefined ? null : String(row.agent_id),
     submission: caseSubmissionSchema.parse({
       proposal: row.proposal,
       riskLevel: row.risk_level,
@@ -96,11 +97,12 @@ export function createPostgresCaseRepository(options: {
     async createCase(record) {
       const result = await pool.query(
         `INSERT INTO cases
-          (id, proposal, risk_level, evidence_mode, evidence, status, created_at, updated_at)
-         VALUES ($1,$2::jsonb,$3,$4,$5::jsonb,$6,$7,$8)
+          (id, agent_id, proposal, risk_level, evidence_mode, evidence, status, created_at, updated_at)
+         VALUES ($1,$2,$3::jsonb,$4,$5,$6::jsonb,$7,$8,$9)
          RETURNING *`,
         [
           record.id,
+          record.agentId,
           JSON.stringify(record.submission.proposal),
           record.submission.riskLevel,
           record.evidenceMode,
@@ -113,16 +115,21 @@ export function createPostgresCaseRepository(options: {
       return caseFromRow(result.rows[0] as Row);
     },
 
-    async listCases(limit) {
+    async listCases(limit, agentId) {
       const result = await pool.query(
-        "SELECT * FROM cases ORDER BY created_at DESC LIMIT $1",
-        [limit],
+        `SELECT * FROM cases
+         WHERE ($2::text IS NULL OR agent_id = $2)
+         ORDER BY created_at DESC LIMIT $1`,
+        [limit, agentId ?? null],
       );
       return result.rows.map((row) => caseFromRow(row as Row));
     },
 
-    async getCase(id) {
-      const result = await pool.query("SELECT * FROM cases WHERE id = $1", [id]);
+    async getCase(id, agentId) {
+      const result = await pool.query(
+        "SELECT * FROM cases WHERE id = $1 AND ($2::text IS NULL OR agent_id = $2)",
+        [id, agentId ?? null],
+      );
       return result.rowCount ? caseFromRow(result.rows[0] as Row) : null;
     },
 
@@ -230,15 +237,24 @@ export function createPostgresCaseRepository(options: {
       }
     },
 
-    async getRun(id) {
-      const result = await pool.query("SELECT * FROM court_runs WHERE id = $1", [id]);
+    async getRun(id, agentId) {
+      const result = await pool.query(
+        `SELECT court_runs.* FROM court_runs
+         JOIN cases ON cases.id = court_runs.case_id
+         WHERE court_runs.id = $1 AND ($2::text IS NULL OR cases.agent_id = $2)`,
+        [id, agentId ?? null],
+      );
       return result.rowCount ? runFromRow(result.rows[0] as Row) : null;
     },
 
-    async getReport(runId): Promise<StoredReport | null> {
+    async getReport(runId, agentId): Promise<StoredReport | null> {
       const result = await pool.query(
-        "SELECT run_id, report, markdown, created_at FROM ruling_reports WHERE run_id = $1",
-        [runId],
+        `SELECT ruling_reports.run_id, ruling_reports.report, ruling_reports.markdown, ruling_reports.created_at
+         FROM ruling_reports
+         JOIN court_runs ON court_runs.id = ruling_reports.run_id
+         JOIN cases ON cases.id = court_runs.case_id
+         WHERE ruling_reports.run_id = $1 AND ($2::text IS NULL OR cases.agent_id = $2)`,
+        [runId, agentId ?? null],
       );
       if (!result.rowCount) return null;
       const row = result.rows[0] as Row;

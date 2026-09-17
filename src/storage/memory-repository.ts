@@ -25,16 +25,17 @@ export function createMemoryCaseRepository(): CaseRepository {
       return clone(record);
     },
 
-    async listCases(limit) {
+    async listCases(limit, agentId) {
       return [...cases.values()]
+        .filter((record) => !agentId || record.agentId === agentId)
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
         .slice(0, limit)
         .map(clone);
     },
 
-    async getCase(id) {
+    async getCase(id, agentId) {
       const record = cases.get(id);
-      return record ? clone(record) : null;
+      return record && (!agentId || record.agentId === agentId) ? clone(record) : null;
     },
 
     async replaceEvidence(id, evidence: EvidenceReference[], updatedAt) {
@@ -97,12 +98,17 @@ export function createMemoryCaseRepository(): CaseRepository {
       }
     },
 
-    async getRun(id) {
+    async getRun(id, agentId) {
       const record = runs.get(id);
-      return record ? clone(record) : null;
+      if (!record) return null;
+      const caseRecord = cases.get(record.caseId);
+      return !agentId || caseRecord?.agentId === agentId ? clone(record) : null;
     },
 
-    async getReport(runId) {
+    async getReport(runId, agentId) {
+      const run = runs.get(runId);
+      const caseRecord = run ? cases.get(run.caseId) : null;
+      if (agentId && caseRecord?.agentId !== agentId) return null;
       const report = reports.get(runId);
       return report ? clone(report) : null;
     },

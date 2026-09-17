@@ -8,6 +8,7 @@ export type RunStatus = "RUNNING" | "COMPLETED" | "FAILED";
 
 export type CaseRecord = {
   id: string;
+  agentId: string | null;
   submission: CaseSubmission;
   evidenceMode: EvidenceMode;
   status: CaseStatus;
@@ -37,14 +38,14 @@ export type StoredReport = {
 export interface CaseRepository {
   readonly name: string;
   createCase(record: CaseRecord): Promise<CaseRecord>;
-  listCases(limit: number): Promise<CaseRecord[]>;
-  getCase(id: string): Promise<CaseRecord | null>;
+  listCases(limit: number, agentId?: string | null): Promise<CaseRecord[]>;
+  getCase(id: string, agentId?: string | null): Promise<CaseRecord | null>;
   replaceEvidence(id: string, evidence: EvidenceReference[], updatedAt: string): Promise<CaseRecord | null>;
   setCaseStatus(id: string, status: CaseStatus, updatedAt: string): Promise<void>;
   createRun(record: CourtRunRecord): Promise<CourtRunRecord>;
   completeRun(id: string, result: CourtRunResult, markdown: string): Promise<void>;
   failRun(id: string, error: string, completedAt: string): Promise<void>;
-  getRun(id: string): Promise<CourtRunRecord | null>;
-  getReport(runId: string): Promise<StoredReport | null>;
+  getRun(id: string, agentId?: string | null): Promise<CourtRunRecord | null>;
+  getReport(runId: string, agentId?: string | null): Promise<StoredReport | null>;
   close(): Promise<void>;
 }

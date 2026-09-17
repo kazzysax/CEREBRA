@@ -10,43 +10,74 @@ import { createMockEvidenceProvider } from "./evidence/mock-evidence-provider.js
 import { createCerebraMcpServer } from "./mcp/create-server.js";
 import type { CaseRepository } from "./storage/contracts.js";
 import { createMemoryCaseRepository } from "./storage/memory-repository.js";
+import { createAgentAuth } from "./identity/auth.js";
+import type { AgentIdentityRepository } from "./identity/contracts.js";
+import { createMemoryAgentIdentityRepository } from "./identity/memory-repository.js";
+import { registerAgentRoutes, resolveAgent } from "./identity/register-routes.js";
+import { withAgentIdentity } from "./identity/context.js";
 
 export async function buildApp(options: {
+  host?: string | undefined;
   allowedHosts?: string[] | undefined;
   courtProvider?: CourtModelProvider | undefined;
   evidenceProvider?: EvidenceProvider | undefined;
   repository?: CaseRepository | undefined;
+  identityRepository?: AgentIdentityRepository | undefined;
+  auth?: {
+    mode: "open" | "agent-key";
+    apiKeyPepper: string;
+    registrationToken?: string | undefined;
+  } | undefined;
 } = {}) {
-  const app = await createMcpFastifyApp({
-    allowedHosts: options.allowedHosts ?? ["127.0.0.1", "localhost"],
-  });
+  const allowAnyHost = options.allowedHosts?.includes("*") ?? false;
+  const host = options.host ?? "127.0.0.1";
+  const app = await createMcpFastifyApp(allowAnyHost
+    ? { host }
+    : { host, allowedHosts: options.allowedHosts ?? ["127.0.0.1", "localhost"] });
   const courtProvider = options.courtProvider ?? createMockCourtProvider();
   const evidenceProvider = options.evidenceProvider ?? createMockEvidenceProvider();
   const repository = options.repository ?? createMemoryCaseRepository();
-  const mcpHandler = createMcpHandler(createCerebraMcpServer);
+  const identityRepository = options.identityRepository ?? createMemoryAgentIdentityRepository();
+  const auth = createAgentAuth({
+    repository: identityRepository,
+    mode: options.auth?.mode ?? "open",
+    apiKeyPepper: options.auth?.apiKeyPepper ?? "development-only-cerebra-key-pepper",
+    registrationToken: options.auth?.registrationToken,
+  });
+  const mcpHandler = createMcpHandler(() => createCerebraMcpServer({
+    repository,
+    evidenceProvider,
+    courtProvider,
+  }));
   const nodeHandler = toNodeHandler(mcpHandler);
 
-  app.addHook("onClose", async () => repository.close());
+  app.addHook("onClose", async () => {
+    await Promise.all([repository.close(), identityRepository.close()]);
+  });
 
   app.get("/health/live", async () => ({ status: "ok" }));
   app.get("/health/ready", async () => ({ status: "ready" }));
   app.get("/v1/meta", async () => ({
     name: "cerebra",
-    version: "0.4.0",
+    version: "0.5.0",
     courtProvider: {
       name: courtProvider.name,
       model: courtProvider.model,
     },
     evidenceProvider: evidenceProvider.name,
     storage: repository.name,
+    agentAuth: auth.mode,
     topology: {
       researchers: ["analyst", "challenger"],
       judges: ["judge-risk", "judge-evidence", "judge-strategy"],
       votingRule: "equal-weight simple majority",
     },
   }));
-  registerCaseRoutes(app, { repository, evidenceProvider, courtProvider });
+  registerAgentRoutes(app, auth);
+  registerCaseRoutes(app, { repository, evidenceProvider, courtProvider, auth });
   app.post("/v1/court/runs", async (request, reply) => {
+    const agent = await resolveAgent(request, reply, auth);
+    if (agent === undefined) return;
     const submission = caseSubmissionSchema.safeParse(request.body);
     if (!submission.success) {
       return reply.code(400).send({
@@ -69,11 +100,13 @@ export async function buildApp(options: {
     }
   });
   app.all("/mcp", async (request, reply) => {
-    await nodeHandler(
+    const agent = await resolveAgent(request, reply, auth);
+    if (agent === undefined) return;
+    await withAgentIdentity(agent, () => nodeHandler(
       request.raw as Parameters<typeof nodeHandler>[0],
       reply.raw,
       request.body,
-    );
+    ));
   });
 
   return app;
