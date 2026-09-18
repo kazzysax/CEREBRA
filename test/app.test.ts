@@ -42,6 +42,11 @@ test("MCP endpoint exposes Cerebra tools", async () => {
   assert.match(body, /cerebra_create_case/);
   assert.match(body, /cerebra_run_court/);
   assert.match(body, /cerebra_get_report/);
+  assert.match(body, /cerebra_enqueue_court/);
+  assert.match(body, /cerebra_get_job/);
+  assert.match(body, /cerebra_save_strategy/);
+  assert.match(body, /cerebra_recall_memory/);
+  assert.match(body, /cerebra_save_checkpoint/);
   assert.match(body, /court_tally_preview/);
   await app.close();
 });

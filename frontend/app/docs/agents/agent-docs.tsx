@@ -8,7 +8,7 @@ import { BrandMark } from '@/components/court-panel';
 const snippets = {
   register: 'POST ${CEREBRA_API_URL}/v1/agents/register\nContent-Type: application/json\nX-Cerebra-Registration-Token: <registration-token>\n\n{\n  "name": "atlas-trader",\n  "description": "Research agent for tokenized U.S. stocks",\n  "capabilities": ["stock-research", "risk-review"]\n}',
   case: 'POST ${CEREBRA_API_URL}/v1/cases\nAuthorization: Bearer <agent-api-key>\nContent-Type: application/json\n\n{\n  "proposal": {\n    "asset": "TSLAUSDT",\n    "market": "usdt-futures",\n    "timeframe": "4h",\n    "summary": "Evaluate a provisional TSLA long thesis."\n  },\n  "riskLevel": "MEDIUM",\n  "evidenceMode": "BITGET"\n}',
-  run: 'POST ${CEREBRA_API_URL}/v1/cases/{caseId}/run\nAuthorization: Bearer <agent-api-key>\nContent-Type: application/json\n\n{ "refreshEvidence": true }',
+  run: 'POST ${CEREBRA_API_URL}/v1/cases/{caseId}/jobs\nAuthorization: Bearer <agent-api-key>\nIdempotency-Key: <unique-operation-id>\nContent-Type: application/json\n\n{ "refreshEvidence": true }\n\nGET ${CEREBRA_API_URL}/v1/jobs/{jobId}',
   report: 'GET ${CEREBRA_API_URL}/v1/runs/{runId}/report\nAuthorization: Bearer <agent-api-key>',
   mcp: '{\n  "mcpServers": {\n    "cerebra": {\n      "url": "${CEREBRA_API_URL}/mcp",\n      "headers": {\n        "Authorization": "Bearer <agent-api-key>"\n      }\n    }\n  }\n}',
 } as const;
@@ -38,8 +38,13 @@ const endpoints = [
   ['POST', '/v1/cases', 'Create an owner-scoped stock case and collect its evidence packet.'],
   ['GET', '/v1/cases', 'List only the cases belonging to the authenticated agent.'],
   ['POST', '/v1/cases/:id/run', 'Refresh evidence and convene the complete five-agent court.'],
+  ['POST', '/v1/cases/:id/jobs', 'Queue a durable, retryable court proceeding with an idempotency key.'],
+  ['GET', '/v1/jobs/:id', 'Read job stage, attempts, failure state and the completed run ID.'],
   ['GET', '/v1/runs/:id', 'Read execution state, provider, timing and the complete result.'],
   ['GET', '/v1/runs/:id/report', 'Retrieve the portable ruling, Markdown report and dissent.'],
+  ['POST', '/v1/memory/strategies', 'Create an immutable, owner-scoped strategy version.'],
+  ['GET', '/v1/memory/recall', 'Recall timestamped impressions with expiration labels.'],
+  ['POST', '/v1/memory/checkpoints', 'Store safe recovery state without replaying external actions.'],
 ] as const;
 
 export function AgentDocs() {
@@ -137,8 +142,8 @@ export function AgentDocs() {
           <section className="docs-section" id="mcp">
             <div className="docs-section__label"><span>05</span><i /><strong>MODEL CONTEXT PROTOCOL</strong></div>
             <div className="docs-two-column">
-              <div><h2>Discover the court as tools.</h2><p>Connect an MCP-compatible client to <code>/mcp</code>. The server publishes typed case creation, court execution, report retrieval and service-status tools backed by the same persistent Decision Kit.</p></div>
-              <div className="docs-tool-list"><span>cerebra_status</span><span>cerebra_create_case</span><span>cerebra_run_court</span><span>cerebra_get_report</span></div>
+              <div><h2>Discover the court as tools.</h2><p>Connect an MCP-compatible client to <code>/mcp</code>. The server publishes typed case creation, durable jobs, report retrieval and persistent agent memory backed by the same Decision Kit.</p></div>
+              <div className="docs-tool-list"><span>cerebra_status</span><span>cerebra_create_case</span><span>cerebra_run_court</span><span>cerebra_enqueue_court</span><span>cerebra_get_job</span><span>cerebra_get_report</span><span>cerebra_save_strategy</span><span>cerebra_recall_memory</span><span>cerebra_save_checkpoint</span></div>
             </div>
             <CodeBlock name="mcp" label="MCP_CLIENT.JSON" />
           </section>
@@ -165,7 +170,7 @@ export function AgentDocs() {
             <div><span>NON-CUSTODIAL DECISION LAYER</span><h2>Cerebra never silently places the trade.</h2><p>The Decision Kit is an advisory artifact. A human or separately governed execution service must review the ruling and authorize capital movement.</p></div>
           </section>
 
-          <footer className="docs-footer"><div><BookOpen /><span>END / AGENT CONNECTION</span></div><Link href="/">Return to Cerebra <ArrowRight /></Link><a href="https://www.bitget.com/activity-hub/agent-hub" target="_blank" rel="noreferrer">Bitget Agent Hub <ExternalLink /></a></footer>
+          <footer className="docs-footer"><div><BookOpen /><span>END / AGENT CONNECTION</span></div><Link href="/agents">Open identity portal <ArrowRight /></Link><Link href="/">Return to Cerebra <ArrowRight /></Link><a href="https://www.bitget.com/activity-hub/agent-hub" target="_blank" rel="noreferrer">Bitget Agent Hub <ExternalLink /></a></footer>
         </article>
       </div>
     </main>

@@ -10,6 +10,10 @@ const configSchema = z.object({
   AGENT_AUTH_MODE: z.enum(["open", "agent-key"]).default("open"),
   AGENT_API_KEY_PEPPER: z.string().min(32).optional(),
   AGENT_REGISTRATION_TOKEN: z.string().min(32).optional(),
+  JOB_WORKER_ENABLED: z.string().default("true").transform((value) => value === "true"),
+  JOB_POLL_INTERVAL_MS: z.coerce.number().int().min(100).max(60_000).default(1_000),
+  JOB_LEASE_MS: z.coerce.number().int().min(30_000).max(3_600_000).default(900_000),
+  JOB_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
   DATABASE_URL: z.string().min(1).optional(),
   DATABASE_SSL: z.string().default("false").transform((value) => value === "true"),
   QWEN_API_KEY: z.string().min(1).optional(),
@@ -59,6 +63,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       mode: parsed.AGENT_AUTH_MODE,
       apiKeyPepper: parsed.AGENT_API_KEY_PEPPER ?? "development-only-cerebra-key-pepper",
       registrationToken: parsed.AGENT_REGISTRATION_TOKEN,
+    },
+    jobs: {
+      enabled: parsed.JOB_WORKER_ENABLED,
+      pollIntervalMs: parsed.JOB_POLL_INTERVAL_MS,
+      leaseMs: parsed.JOB_LEASE_MS,
+      maxAttempts: parsed.JOB_MAX_ATTEMPTS,
     },
   };
 }

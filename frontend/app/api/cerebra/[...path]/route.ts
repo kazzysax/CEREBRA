@@ -10,7 +10,11 @@ async function proxy(request: Request, context: RouteContext) {
     const headers: Record<string, string> = {
       'content-type': request.headers.get('content-type') ?? 'application/json',
     };
-    if (agentApiKey) headers.authorization = 'Bearer ' + agentApiKey;
+    const incomingAuthorization = request.headers.get('authorization');
+    if (incomingAuthorization) headers.authorization = incomingAuthorization;
+    else if (agentApiKey) headers.authorization = 'Bearer ' + agentApiKey;
+    const registrationToken = request.headers.get('x-cerebra-registration-token');
+    if (registrationToken) headers['x-cerebra-registration-token'] = registrationToken;
     const response = await fetch(target, { method: request.method, headers, body: request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.text() });
     return new Response(response.body, { status: response.status, headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' } });
   } catch (error) {

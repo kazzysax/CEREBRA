@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { caseSubmissionSchema, type CourtModelProvider } from "../agents/contracts.js";
-import { runCourt } from "../court/run-court.js";
-import { renderRulingMarkdown } from "../domain/report-renderer.js";
 import type { EvidenceProvider } from "../evidence/contracts.js";
 import type { CaseRepository } from "../storage/contracts.js";
 import type { AgentAuth } from "../identity/auth.js";
 import { resolveAgent } from "../identity/register-routes.js";
+import { CaseExecutionError, executeCase } from "./execute-case.js";
 import {
   createCaseSchema,
   idParamsSchema,
@@ -130,54 +129,25 @@ export function registerCaseRoutes(app: FastifyInstance, options: CaseRouteOptio
     const body = runCaseSchema.safeParse(request.body ?? {});
     if (!body.success) return validationError(reply, "INVALID_RUN_REQUEST", body.error);
 
-    let record = await options.repository.getCase(params.data.id, agent?.id ?? null);
-    if (!record) return reply.code(404).send({ error: "CASE_NOT_FOUND" });
-    const runId = idFactory();
-    let runCreated = false;
-
     try {
-      if (record.evidenceMode === "BITGET" && body.data.refreshEvidence) {
-        const evidence = await options.evidenceProvider.collect(record.submission.proposal);
-        record = await options.repository.replaceEvidence(
-          record.id,
-          evidence,
-          now().toISOString(),
-        );
-        if (!record) throw new Error("Case disappeared during evidence refresh");
-      }
-
-      const startedAt = now().toISOString();
-      await options.repository.setCaseStatus(record.id, "RUNNING", startedAt);
-      await options.repository.createRun({
-        id: runId,
-        caseId: record.id,
-        status: "RUNNING",
-        provider: options.courtProvider.name,
-        model: options.courtProvider.model,
-        startedAt,
-        completedAt: null,
-        result: null,
-        error: null,
+      const result = await executeCase({
+        caseId: params.data.id,
+        agentId: agent?.id ?? null,
+        refreshEvidence: body.data.refreshEvidence,
+        repository: options.repository,
+        evidenceProvider: options.evidenceProvider,
+        courtProvider: options.courtProvider,
+        now,
+        idFactory,
       });
-      runCreated = true;
-
-      const result = await runCourt(record.submission, options.courtProvider, {
-        idFactory: () => runId,
-      });
-      const markdown = renderRulingMarkdown(result.report);
-      await options.repository.completeRun(runId, result, markdown);
       return reply.code(201).send(result);
     } catch (error) {
       request.log.error({ error }, "case court run failed");
       const message = error instanceof Error ? error.message : "Unknown court run failure";
-      if (runCreated) {
-        try {
-          await options.repository.failRun(runId, message, now().toISOString());
-        } catch (persistenceError) {
-          request.log.error({ persistenceError }, "failed to persist court run failure");
-        }
+      if (error instanceof CaseExecutionError && error.code === "CASE_NOT_FOUND") {
+        return reply.code(404).send({ error: error.code });
       }
-      return reply.code(502).send({ error: "COURT_RUN_FAILED", message, runId });
+      return reply.code(502).send({ error: "COURT_RUN_FAILED", message, runId: error instanceof CaseExecutionError ? error.runId : undefined });
     }
   });
 

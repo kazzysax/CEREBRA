@@ -11,7 +11,7 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { BrandMark, Dissent, JudgeCard, Pipeline } from '@/components/court-panel';
-import { cerebraApi, sampleReport, shortDate, type CaseRecord, type CourtRunResult, type RunPhase } from '@/lib/cerebra';
+import { cerebraApi, sampleReport, shortDate, type CaseRecord, type CourtJob, type CourtRunRecord, type CourtRunResult, type RunPhase } from '@/lib/cerebra';
 
 const sampleCases = [
   { id: 'sample-tsla', asset: 'TSLAUSDT', status: 'APPROVED', time: '12m', votes: '2–1' },
@@ -20,8 +20,8 @@ const sampleCases = [
 ];
 
 const agentGuideSnippets = {
-  http: 'POST ${CEREBRA_API_URL}/v1/cases\n{\n  "proposal": {\n    "asset": "TSLAUSDT",\n    "market": "usdt-futures",\n    "timeframe": "4h",\n    "summary": "Evaluate a provisional TSLA long thesis."\n  },\n  "riskLevel": "MEDIUM",\n  "evidenceMode": "BITGET"\n}\n\nPOST /v1/cases/{caseId}/run\nGET  /v1/runs/{runId}/report',
-  mcp: '{\n  "mcpServers": {\n    "cerebra": {\n      "url": "${CEREBRA_API_URL}/mcp"\n    }\n  }\n}\n\nCurrent tools:\n- cerebra_status\n- court_tally_preview',
+  http: 'POST ${CEREBRA_API_URL}/v1/cases\nAuthorization: Bearer <agent-api-key>\n{\n  "proposal": {\n    "asset": "TSLAUSDT",\n    "market": "usdt-futures",\n    "timeframe": "4h",\n    "summary": "Evaluate a provisional TSLA long thesis."\n  },\n  "riskLevel": "MEDIUM",\n  "evidenceMode": "BITGET"\n}\n\nPOST /v1/cases/{caseId}/jobs\nGET  /v1/jobs/{jobId}\nGET  /v1/runs/{runId}/report',
+  mcp: '{\n  "mcpServers": {\n    "cerebra": {\n      "url": "${CEREBRA_API_URL}/mcp",\n      "headers": { "Authorization": "Bearer <agent-api-key>" }\n    }\n  }\n}\n\nWorkflow tools:\n- cerebra_create_case\n- cerebra_enqueue_court\n- cerebra_get_job\n- cerebra_get_report\n- cerebra_save_strategy\n- cerebra_recall_memory\n- cerebra_save_checkpoint',
   browser: 'Tool: create_cerebra_case_and_run_court\n\nInput:\n  asset · market · timeframe\n  riskLevel · summary\n\nReturns:\n  runId · verdict · status\n  dissentingJudgeIds',
 } as const;
 
@@ -139,10 +139,22 @@ export default function Home() {
       setCases((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setConnected(true);
       setPhase('ANALYSING');
-      const run = await cerebraApi<CourtRunResult>(`/v1/cases/${created.id}/run`, {
+      const job = await cerebraApi<CourtJob>(`/v1/cases/${created.id}/jobs`, {
         method: 'POST',
+        headers: { 'idempotency-key': crypto.randomUUID() },
         body: JSON.stringify({ refreshEvidence: false }),
       });
+      let current = job;
+      for (let attempt = 0; attempt < 180 && !['COMPLETED', 'FAILED', 'CANCELLED'].includes(current.status); attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        current = await cerebraApi<CourtJob>(`/v1/jobs/${job.id}`);
+      }
+      if (current.status !== 'COMPLETED' || !current.runId) {
+        throw new Error(current.error ?? `Court job ended with ${current.status}.`);
+      }
+      const runRecord = await cerebraApi<CourtRunRecord>(`/v1/runs/${current.runId}`);
+      if (!runRecord.result) throw new Error('The completed court job did not contain a result.');
+      const run = runRecord.result;
       setResult(run);
       setPhase('COMPLETE');
       await loadCases();
@@ -178,6 +190,7 @@ export default function Home() {
           <div className="command-nav__actions">
             <button className="command-control" aria-label="Search cases" onClick={() => setSidebarOpen(true)}><Search /></button>
             <Link className="command-control" aria-label="Open agent documentation" href="/docs/agents"><BookOpen /></Link>
+            <Link className="command-control" aria-label="Open agent identity portal" href="/agents"><Fingerprint /></Link>
             <button className="command-control command-control--history" aria-label="View case history" onClick={() => setSidebarOpen(true)}><History /></button>
             <button className="command-primary" onClick={() => document.getElementById('case-input')?.scrollIntoView({ behavior: 'smooth' })}>Review stock <ArrowDownRight /></button>
           </div>
@@ -345,7 +358,7 @@ export default function Home() {
           <Tabs defaultValue="http" className="agent-guide">
             <TabsList variant="line" className="agent-guide__tabs" aria-label="Agent connection methods">
               <TabsTrigger value="http"><Code2 />HTTP API <span>RECOMMENDED</span></TabsTrigger>
-              <TabsTrigger value="mcp"><Cable />MCP <span>PREVIEW</span></TabsTrigger>
+              <TabsTrigger value="mcp"><Cable />MCP <span>FULL TOOLSET</span></TabsTrigger>
               <TabsTrigger value="browser"><PanelsTopLeft />BROWSER TOOL <span>BUILT IN</span></TabsTrigger>
             </TabsList>
 
@@ -374,13 +387,13 @@ export default function Home() {
                 <div className="agent-guide-panel__lead">
                   <span>02 / MODEL CONTEXT PROTOCOL</span>
                   <h3>Discover Cerebra as a tool server.</h3>
-                  <p>Point an MCP-compatible client at the Cerebra endpoint. The present MCP surface exposes topology status and a deterministic ruling preview; use HTTP for full persistent runs.</p>
-                  <strong className="is-preview"><i /> WORKFLOW TOOLS NEXT</strong>
+                  <p>Point an MCP-compatible client at the Cerebra endpoint. The full surface creates cases, queues durable court jobs, retrieves Decision Kits, and reads or writes persistent agent memory.</p>
+                  <strong><i /> WORKFLOW TOOLS ACTIVE</strong>
                 </div>
                 <ol className="connection-steps">
                   <li><span>01</span><div><strong>Add the endpoint</strong><p>Register the deployed Cerebra origin followed by <code>/mcp</code>.</p></div></li>
                   <li><span>02</span><div><strong>Discover available tools</strong><p>The client reads tool names, schemas and structured-result contracts.</p></div></li>
-                  <li><span>03</span><div><strong>Use HTTP for live cases</strong><p>The full create, run and retrieve workflow remains available through the Decision Kit API.</p></div></li>
+                  <li><span>03</span><div><strong>Run the complete workflow</strong><p>Create the case, enqueue the court, poll its durable job, then retrieve the report.</p></div></li>
                 </ol>
                 <div className="connection-terminal">
                   <div className="connection-terminal__bar"><span><i /><i /><i />MCP_CONNECTION.JSON</span><button onClick={() => void copyAgentGuide('mcp')}>{copiedGuide === 'mcp' ? <Check /> : <Clipboard />}{copiedGuide === 'mcp' ? 'Copied' : 'Copy'}</button></div>

@@ -13,6 +13,8 @@ Agent guide: https://cerebra-decision-court.web3kingley.chatgpt.site/docs/agents
 - Claude and Qwen adapters with validated structured output, retries, timeouts, and usage traces
 - PostgreSQL persistence for identities, cases, runs, all agent outputs, reports, and dissent
 - Agent registration, bearer-key authentication, rotation, revocation, and tenant isolation
+- Immutable strategy versions, timestamped impressions, memory recall, and recovery checkpoints
+- Durable court jobs with idempotency keys, leases, fencing generations, retries, progress, and cancellation
 - REST API plus full Streamable HTTP MCP tools
 - Stock-first responsive frontend, case history, full report view, and Markdown export
 - Deterministic mock mode for free local development and judging demos
@@ -75,8 +77,17 @@ Identity endpoints:
 - `GET /v1/cases/:id` — retrieve an owned case
 - `POST /v1/cases/:id/evidence/refresh` — refresh Bitget evidence
 - `POST /v1/cases/:id/run` — run the five-agent court
+- `POST /v1/cases/:id/jobs` — enqueue a durable court run
+- `GET /v1/jobs/:id` — poll progress and retrieve the final run ID
+- `POST /v1/jobs/:id/cancel` — cancel a queued job
 - `GET /v1/runs/:id` — retrieve run state and trace
 - `GET /v1/runs/:id/report` — retrieve the full Decision Kit and Markdown report
+- `POST /v1/memory/strategies` — save an immutable strategy version
+- `GET /v1/memory/strategies` — list strategy lineage
+- `POST /v1/memory/impressions` — store a timestamped market belief
+- `GET /v1/memory/recall` — recall beliefs with expiration labels
+- `POST /v1/memory/checkpoints` — store safe restart state
+- `GET /v1/memory/checkpoints/latest` — restore the latest checkpoint
 
 Example:
 
@@ -98,7 +109,12 @@ Tools:
 - `cerebra_status`
 - `cerebra_create_case`
 - `cerebra_run_court`
+- `cerebra_enqueue_court`
+- `cerebra_get_job`
 - `cerebra_get_report`
+- `cerebra_save_strategy`
+- `cerebra_recall_memory`
+- `cerebra_save_checkpoint`
 - `court_tally_preview`
 
 ## Models

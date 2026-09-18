@@ -6,6 +6,8 @@ import { createBitgetEvidenceProvider } from "./evidence/bitget-evidence-provide
 import { createMockEvidenceProvider } from "./evidence/mock-evidence-provider.js";
 import { createConfiguredCaseRepository } from "./storage/repository-factory.js";
 import { createConfiguredAgentIdentityRepository } from "./identity/repository-factory.js";
+import { createConfiguredAgentMemoryRepository } from "./memory/repository-factory.js";
+import { createConfiguredCourtJobRepository } from "./jobs/repository-factory.js";
 
 const config = loadConfig();
 const courtProvider = createConfiguredCourtProvider(config.ai);
@@ -14,6 +16,8 @@ const evidenceProvider = config.evidenceProvider === "bitget"
   : createMockEvidenceProvider();
 const repository = createConfiguredCaseRepository(config.storage);
 const identityRepository = createConfiguredAgentIdentityRepository(config.storage);
+const memoryRepository = createConfiguredAgentMemoryRepository(config.storage);
+const jobRepository = createConfiguredCourtJobRepository(config.storage);
 const app = await buildApp({
   host: config.host,
   allowedHosts: config.allowedHosts,
@@ -21,7 +25,10 @@ const app = await buildApp({
   evidenceProvider,
   repository,
   identityRepository,
+  memoryRepository,
+  jobRepository,
   auth: config.auth,
+  jobs: config.jobs,
 });
 
 const shutdown = async (signal: string) => {

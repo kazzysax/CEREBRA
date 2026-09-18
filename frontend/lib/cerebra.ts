@@ -38,6 +38,13 @@ export type CaseRecord = {
   };
 };
 export type RunPhase = 'IDLE' | 'COLLECTING' | 'ANALYSING' | 'COMPLETE';
+export type CourtJob = {
+  id: string; caseId: string; runId: string | null;
+  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  stage: string; attemptCount: number; maxAttempts: number; error: string | null;
+  createdAt: string; updatedAt: string; completedAt: string | null;
+};
+export type CourtRunRecord = { id: string; status: string; result: CourtRunResult | null; error: string | null };
 
 export const sampleReport: CourtRunResult = {
   runId: 'run-demo-tsla-4h', startedAt: '2026-09-17T08:36:12.000Z', completedAt: '2026-09-17T08:36:26.000Z',
@@ -93,6 +100,10 @@ export async function cerebraApi<T>(path: string, init?: RequestInit): Promise<T
     throw new Error(detail);
   }
   return body as T;
+}
+
+export function agentHeaders(apiKey: string): HeadersInit {
+  return { authorization: 'Bearer ' + apiKey };
 }
 
 export function shortDate(value: string) {

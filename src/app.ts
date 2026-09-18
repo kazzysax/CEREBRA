@@ -15,6 +15,13 @@ import type { AgentIdentityRepository } from "./identity/contracts.js";
 import { createMemoryAgentIdentityRepository } from "./identity/memory-repository.js";
 import { registerAgentRoutes, resolveAgent } from "./identity/register-routes.js";
 import { withAgentIdentity } from "./identity/context.js";
+import type { AgentMemoryRepository } from "./memory/contracts.js";
+import { createMemoryAgentMemoryRepository } from "./memory/memory-repository.js";
+import { registerMemoryRoutes } from "./memory/register-routes.js";
+import type { CourtJobRepository } from "./jobs/contracts.js";
+import { createMemoryCourtJobRepository } from "./jobs/memory-repository.js";
+import { registerJobRoutes } from "./jobs/register-routes.js";
+import { createCourtJobWorker } from "./jobs/worker.js";
 
 export async function buildApp(options: {
   host?: string | undefined;
@@ -23,6 +30,14 @@ export async function buildApp(options: {
   evidenceProvider?: EvidenceProvider | undefined;
   repository?: CaseRepository | undefined;
   identityRepository?: AgentIdentityRepository | undefined;
+  memoryRepository?: AgentMemoryRepository | undefined;
+  jobRepository?: CourtJobRepository | undefined;
+  jobs?: {
+    enabled: boolean;
+    pollIntervalMs?: number | undefined;
+    leaseMs?: number | undefined;
+    maxAttempts?: number | undefined;
+  } | undefined;
   auth?: {
     mode: "open" | "agent-key";
     apiKeyPepper: string;
@@ -38,6 +53,8 @@ export async function buildApp(options: {
   const evidenceProvider = options.evidenceProvider ?? createMockEvidenceProvider();
   const repository = options.repository ?? createMemoryCaseRepository();
   const identityRepository = options.identityRepository ?? createMemoryAgentIdentityRepository();
+  const memoryRepository = options.memoryRepository ?? createMemoryAgentMemoryRepository();
+  const jobRepository = options.jobRepository ?? createMemoryCourtJobRepository();
   const auth = createAgentAuth({
     repository: identityRepository,
     mode: options.auth?.mode ?? "open",
@@ -48,24 +65,38 @@ export async function buildApp(options: {
     repository,
     evidenceProvider,
     courtProvider,
+    jobs: jobRepository,
+    memory: memoryRepository,
+    maxJobAttempts: options.jobs?.maxAttempts,
   }));
   const nodeHandler = toNodeHandler(mcpHandler);
+  const jobWorker = createCourtJobWorker({
+    jobs: jobRepository,
+    cases: repository,
+    evidenceProvider,
+    courtProvider,
+    pollIntervalMs: options.jobs?.pollIntervalMs,
+    leaseMs: options.jobs?.leaseMs,
+  });
 
   app.addHook("onClose", async () => {
-    await Promise.all([repository.close(), identityRepository.close()]);
+    await jobWorker.stop();
+    await Promise.all([repository.close(), identityRepository.close(), memoryRepository.close(), jobRepository.close()]);
   });
 
   app.get("/health/live", async () => ({ status: "ok" }));
   app.get("/health/ready", async () => ({ status: "ready" }));
   app.get("/v1/meta", async () => ({
     name: "cerebra",
-    version: "0.5.0",
+    version: "0.6.0",
     courtProvider: {
       name: courtProvider.name,
       model: courtProvider.model,
     },
     evidenceProvider: evidenceProvider.name,
     storage: repository.name,
+    memory: memoryRepository.name,
+    jobs: { storage: jobRepository.name, workerEnabled: options.jobs?.enabled ?? false },
     agentAuth: auth.mode,
     topology: {
       researchers: ["analyst", "challenger"],
@@ -75,6 +106,13 @@ export async function buildApp(options: {
   }));
   registerAgentRoutes(app, auth);
   registerCaseRoutes(app, { repository, evidenceProvider, courtProvider, auth });
+  registerMemoryRoutes(app, { repository: memoryRepository, auth });
+  registerJobRoutes(app, {
+    jobs: jobRepository,
+    cases: repository,
+    auth,
+    maxAttempts: options.jobs?.maxAttempts,
+  });
   app.post("/v1/court/runs", async (request, reply) => {
     const agent = await resolveAgent(request, reply, auth);
     if (agent === undefined) return;
@@ -108,6 +146,8 @@ export async function buildApp(options: {
       request.body,
     ));
   });
+
+  if (options.jobs?.enabled) jobWorker.start();
 
   return app;
 }
