@@ -64,6 +64,14 @@ export function createMemoryCaseRepository(): CaseRepository {
       return clone(record);
     },
 
+    async listRuns(limit, agentId) {
+      return [...runs.values()]
+        .filter((run) => !agentId || cases.get(run.caseId)?.agentId === agentId)
+        .sort((left, right) => (right.completedAt ?? right.startedAt).localeCompare(left.completedAt ?? left.startedAt))
+        .slice(0, limit)
+        .map(clone);
+    },
+
     async completeRun(id, result, markdown) {
       const record = runs.get(id);
       if (!record) throw new Error("Unknown run: " + id);

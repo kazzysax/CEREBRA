@@ -171,6 +171,18 @@ export function createPostgresCaseRepository(options: {
       return runFromRow(result.rows[0] as Row);
     },
 
+    async listRuns(limit, agentId) {
+      const result = await pool.query(
+        `SELECT court_runs.* FROM court_runs
+         JOIN cases ON cases.id = court_runs.case_id
+         WHERE ($2::text IS NULL OR cases.agent_id = $2)
+         ORDER BY COALESCE(court_runs.completed_at, court_runs.started_at) DESC
+         LIMIT $1`,
+        [limit, agentId ?? null],
+      );
+      return result.rows.map((row) => runFromRow(row as Row));
+    },
+
     async completeRun(id, result, markdown) {
       const client = await pool.connect();
       try {

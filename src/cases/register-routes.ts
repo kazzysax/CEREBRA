@@ -94,6 +94,14 @@ export function registerCaseRoutes(app: FastifyInstance, options: CaseRouteOptio
     return record;
   });
 
+  app.get("/v1/runs", async (request, reply) => {
+    const agent = await resolveAgent(request, reply, options.auth);
+    if (agent === undefined) return;
+    const query = listCasesQuerySchema.safeParse(request.query);
+    if (!query.success) return validationError(reply, "INVALID_QUERY", query.error);
+    return { runs: await options.repository.listRuns(query.data.limit, agent?.id ?? null) };
+  });
+
   app.post("/v1/cases/:id/evidence/refresh", async (request, reply) => {
     const agent = await resolveAgent(request, reply, options.auth);
     if (agent === undefined) return;

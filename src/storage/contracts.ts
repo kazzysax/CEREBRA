@@ -45,6 +45,7 @@ export interface CaseRepository {
   replaceEvidence(id: string, evidence: EvidenceReference[], updatedAt: string): Promise<CaseRecord | null>;
   setCaseStatus(id: string, status: CaseStatus, updatedAt: string): Promise<void>;
   createRun(record: CourtRunRecord): Promise<CourtRunRecord>;
+  listRuns(limit: number, agentId?: string | null): Promise<CourtRunRecord[]>;
   completeRun(id: string, result: CourtRunResult, markdown: string): Promise<void>;
   failRun(id: string, error: string, completedAt: string): Promise<void>;
   getRun(id: string, agentId?: string | null): Promise<CourtRunRecord | null>;
