@@ -78,6 +78,29 @@ test("rotated keys are invalidated and case data is isolated by agent", async ()
   assert.equal(created.statusCode, 201);
   const caseId = created.json().id as string;
 
+  const completed = await app.inject({
+    method: "POST",
+    url: "/v1/cases/" + caseId + "/run",
+    headers: { authorization: "Bearer " + first.apiKey },
+    payload: { refreshEvidence: false },
+  });
+  assert.equal(completed.statusCode, 201);
+
+  const ownerHistory = await app.inject({
+    method: "GET", url: "/v1/runs?limit=25",
+    headers: { authorization: "Bearer " + first.apiKey },
+  });
+  assert.equal(ownerHistory.statusCode, 200);
+  assert.equal(ownerHistory.json().runs.length, 1);
+  assert.equal(ownerHistory.json().runs[0].id, completed.json().runId);
+
+  const otherHistory = await app.inject({
+    method: "GET", url: "/v1/runs?limit=25",
+    headers: { authorization: "Bearer " + second.apiKey },
+  });
+  assert.equal(otherHistory.statusCode, 200);
+  assert.deepEqual(otherHistory.json().runs, []);
+
   const hidden = await app.inject({
     method: "GET",
     url: "/v1/cases/" + caseId,
