@@ -53,6 +53,32 @@ test("runs the full mock court and preserves the risk judge dissent", async () =
   assert.equal(result.report.verdict, "APPROVE");
   assert.deepEqual(result.report.dissentingJudgeIds, ["judge-risk"]);
   assert.equal(result.report.judges[0].opinionType, "DISSENT");
+  assert.deepEqual(result.report.doctrine, {
+    id: "cerebra-advisory-doctrine",
+    version: "v1",
+    title: "Evidence before execution",
+    principles: [
+      "Cerebra gives advisory reports, never trading instructions or guarantees.",
+      "A conclusion must be grounded in supplied, attributable evidence; uncertainty must be named.",
+      "A proposed execution needs an entry thesis, a defined invalidation condition, and a plausible downside assessment.",
+      "Static market snapshots can support an observation but cannot by themselves prove future execution quality.",
+      "Material disagreement and missing evidence must remain visible in the final report.",
+    ],
+    judgeMandates: {
+      "judge-risk": [
+        "Assess downside, invalidation, liquidity, volatility, and adverse-selection risk.",
+        "Reject support when risk cannot be bounded from the supplied evidence.",
+      ],
+      "judge-evidence": [
+        "Assess evidence freshness, attribution, corroboration, contradictions, and material gaps.",
+        "Do not treat one static source as confirmation of a claim that requires observation over time.",
+      ],
+      "judge-strategy": [
+        "Assess whether the thesis, timing, market regime, and execution plan are coherent together.",
+        "Require a plausible invalidation condition before supporting an execution thesis.",
+      ],
+    },
+  });
   assert.equal(result.trace.length, 5);
   assert.equal(result.trace[0]?.stage, "ANALYST");
   assert.equal(result.trace[1]?.stage, "CHALLENGER");

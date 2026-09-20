@@ -5,7 +5,7 @@ import { BrainCircuit, Check, CircleAlert, Fingerprint, LoaderCircle, Radio, Shi
 import type { JudgeOpinion, RunPhase } from '@/lib/cerebra';
 
 export function BrandMark() {
-  return <span className="brand-mark" aria-hidden="true"><span /><span /><span /></span>;
+  return <span className="brand-mark" aria-hidden="true"><img src="/cerebra-mark.png" alt="" /></span>;
 }
 
 function ConfidenceRing({ value }: { value: number | null }) {

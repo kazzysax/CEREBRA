@@ -9,6 +9,7 @@ import type {
   CourtRunRecord,
   StoredReport,
 } from "./contracts.js";
+import type { JudgeCalibration, OutcomeRecord } from "../outcomes/contracts.js";
 
 type Row = Record<string, unknown>;
 
@@ -264,6 +265,73 @@ export function createPostgresCaseRepository(options: {
         markdown: String(row.markdown),
         createdAt: iso(row.created_at),
       };
+    },
+
+    async findPrecedents(query) {
+      const result = await pool.query(
+        `SELECT cases.id AS case_id, cases.proposal, cases.risk_level,
+                court_runs.id AS run_id, court_runs.completed_at, ruling_reports.report
+         FROM cases
+         JOIN court_runs ON court_runs.case_id = cases.id AND court_runs.status = 'COMPLETED'
+         JOIN ruling_reports ON ruling_reports.run_id = court_runs.id
+         WHERE cases.agent_id = $1
+           AND cases.proposal->>'asset' = $2
+           AND cases.proposal->>'market' = $3
+           AND cases.id <> $4
+         ORDER BY court_runs.completed_at DESC
+         LIMIT $5`,
+        [query.agentId, query.asset, query.market, query.excludeCaseId, query.limit],
+      );
+      return result.rows.map((row) => {
+        const proposal = row.proposal as { asset: string; market: string; timeframe: string; summary: string };
+        const report = rulingReportSchema.parse(row.report);
+        return {
+          caseId: String(row.case_id),
+          runId: String(row.run_id),
+          concludedAt: iso(row.completed_at),
+          asset: proposal.asset,
+          market: proposal.market,
+          timeframe: proposal.timeframe,
+          riskLevel: row.risk_level as "LOW" | "MEDIUM" | "HIGH",
+          proposalSummary: proposal.summary,
+          status: report.status,
+          verdict: report.verdict,
+          dissentingJudgeIds: report.dissentingJudgeIds,
+        };
+      });
+    },
+
+    async saveOutcome(record) {
+      const result = await pool.query(
+        `INSERT INTO court_outcomes (id, run_id, agent_id, horizon, thesis_outcome, realized_return_pct, note, observed_at, recorded_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (run_id, horizon) DO UPDATE SET thesis_outcome = EXCLUDED.thesis_outcome, realized_return_pct = EXCLUDED.realized_return_pct, note = EXCLUDED.note, observed_at = EXCLUDED.observed_at, recorded_at = EXCLUDED.recorded_at
+         RETURNING *`,
+        [record.id, record.runId, record.agentId, record.horizon, record.thesisOutcome, record.realizedReturnPct ?? null, record.note ?? null, record.observedAt, record.recordedAt],
+      );
+      const row = result.rows[0] as Row;
+      return { id: String(row.id), runId: String(row.run_id), agentId: String(row.agent_id), horizon: row.horizon as OutcomeRecord["horizon"], thesisOutcome: row.thesis_outcome as OutcomeRecord["thesisOutcome"], realizedReturnPct: row.realized_return_pct === null ? undefined : Number(row.realized_return_pct), note: row.note === null ? undefined : String(row.note), observedAt: iso(row.observed_at), recordedAt: iso(row.recorded_at) };
+    },
+
+    async listOutcomes(runId, agentId) {
+      const result = await pool.query(`SELECT court_outcomes.* FROM court_outcomes JOIN court_runs ON court_runs.id = court_outcomes.run_id JOIN cases ON cases.id = court_runs.case_id WHERE court_outcomes.run_id = $1 AND ($2::text IS NULL OR cases.agent_id = $2) ORDER BY observed_at`, [runId, agentId ?? null]);
+      return result.rows.map((row: Row) => ({ id: String(row.id), runId: String(row.run_id), agentId: String(row.agent_id), horizon: row.horizon as OutcomeRecord["horizon"], thesisOutcome: row.thesis_outcome as OutcomeRecord["thesisOutcome"], realizedReturnPct: row.realized_return_pct === null ? undefined : Number(row.realized_return_pct), note: row.note === null ? undefined : String(row.note), observedAt: iso(row.observed_at), recordedAt: iso(row.recorded_at) }));
+    },
+
+    async getJudgeCalibration(agentId) {
+      const rows = await pool.query(`SELECT court_outcomes.thesis_outcome, ruling_reports.report FROM court_outcomes JOIN ruling_reports ON ruling_reports.run_id = court_outcomes.run_id JOIN court_runs ON court_runs.id = court_outcomes.run_id JOIN cases ON cases.id = court_runs.case_id WHERE cases.agent_id = $1`, [agentId]);
+      const stats = new Map(["judge-risk", "judge-evidence", "judge-strategy"].map((judgeId) => [judgeId, { resolved: 0, correct: 0, incorrect: 0 }]));
+      for (const row of rows.rows as Row[]) {
+        if (row.thesis_outcome === "INCONCLUSIVE") continue;
+        const report = rulingReportSchema.parse(row.report);
+        for (const judge of report.judges) {
+          if (!judge.vote || judge.vote === "ABSTAIN") continue;
+          const stat = stats.get(judge.judgeId)!; stat.resolved += 1;
+          const correct = (judge.vote === "APPROVE" && row.thesis_outcome === "CONFIRMED") || (judge.vote === "REJECT" && row.thesis_outcome === "REFUTED");
+          if (correct) stat.correct += 1; else stat.incorrect += 1;
+        }
+      }
+      return [...stats.entries()].map(([judgeId, stat]) => ({ judgeId: judgeId as JudgeCalibration["judgeId"], ...stat, accuracy: stat.resolved ? stat.correct / stat.resolved : null }));
     },
 
     async close() {

@@ -8,8 +8,15 @@ import { createConfiguredCaseRepository } from "./storage/repository-factory.js"
 import { createConfiguredAgentIdentityRepository } from "./identity/repository-factory.js";
 import { createConfiguredAgentMemoryRepository } from "./memory/repository-factory.js";
 import { createConfiguredCourtJobRepository } from "./jobs/repository-factory.js";
+import { runMigrations } from "./storage/run-migrations.js";
 
 const config = loadConfig();
+if (config.storage.driver === "postgres") {
+  await runMigrations({
+    connectionString: config.storage.databaseUrl!,
+    ssl: config.storage.databaseSsl,
+  });
+}
 const courtProvider = createConfiguredCourtProvider(config.ai);
 const evidenceProvider = config.evidenceProvider === "bitget"
   ? createBitgetEvidenceProvider()

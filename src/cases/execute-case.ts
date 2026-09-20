@@ -38,6 +38,15 @@ export async function executeCase(options: {
       if (!record) throw new Error("Case disappeared during evidence refresh");
     }
 
+    const precedents = options.agentId
+      ? await options.repository.findPrecedents({
+        agentId: options.agentId,
+        asset: record.submission.proposal.asset,
+        market: record.submission.proposal.market,
+        excludeCaseId: record.id,
+        limit: 5,
+      })
+      : [];
     const startedAt = now().toISOString();
     await options.repository.setCaseStatus(record.id, "RUNNING", startedAt);
     await options.repository.createRun({
@@ -47,7 +56,10 @@ export async function executeCase(options: {
     });
     runCreated = true;
     await options.onStage?.("ANALYST");
-    const result = await runCourt(record.submission, options.courtProvider, { idFactory: () => runId });
+    const result = await runCourt(record.submission, options.courtProvider, {
+      idFactory: () => runId,
+      precedents,
+    });
     await options.onStage?.("PERSISTING");
     await options.repository.completeRun(runId, result, renderRulingMarkdown(result.report));
     return result;

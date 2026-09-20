@@ -11,13 +11,7 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { BrandMark, Dissent, JudgeCard, Pipeline } from '@/components/court-panel';
-import { cerebraApi, sampleReport, shortDate, type CaseRecord, type CourtJob, type CourtRunRecord, type CourtRunResult, type RunPhase } from '@/lib/cerebra';
-
-const sampleCases = [
-  { id: 'sample-tsla', asset: 'TSLAUSDT', status: 'APPROVED', time: '12m', votes: '2–1' },
-  { id: 'sample-nvda', asset: 'NVDAUSDT', status: 'REJECTED', time: '1h', votes: '1–2' },
-  { id: 'sample-aapl', asset: 'AAPLUSDT', status: 'INCONCLUSIVE', time: '3h', votes: '1–1' },
-];
+import { cerebraApi, getSessionAgentKey, shortDate, type CaseRecord, type CourtJob, type CourtRunRecord, type CourtRunResult, type RunPhase } from '@/lib/cerebra';
 
 const agentGuideSnippets = {
   http: 'POST ${CEREBRA_API_URL}/v1/cases\nAuthorization: Bearer <agent-api-key>\n{\n  "proposal": {\n    "asset": "TSLAUSDT",\n    "market": "usdt-futures",\n    "timeframe": "4h",\n    "summary": "Evaluate a provisional TSLA long thesis."\n  },\n  "riskLevel": "MEDIUM",\n  "evidenceMode": "BITGET"\n}\n\nPOST /v1/cases/{caseId}/jobs\nGET  /v1/jobs/{jobId}\nGET  /v1/runs/{runId}/report',
@@ -57,14 +51,14 @@ export default function Home() {
   const [riskLevel, setRiskLevel] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
   const [summary, setSummary] = useState('Evaluate a provisional TSLA long thesis across the next four hours of the tokenized trading session.');
   const [phase, setPhase] = useState<RunPhase>('IDLE');
-  const [result, setResult] = useState<CourtRunResult>(sampleReport);
+  const [result, setResult] = useState<CourtRunResult | null>(null);
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [connected, setConnected] = useState(false);
   const [copiedGuide, setCopiedGuide] = useState<keyof typeof agentGuideSnippets | null>(null);
   const isRunning = phase === 'COLLECTING' || phase === 'ANALYSING';
-  const verdict = result.report.verdict ?? 'NO VERDICT';
+  const verdict = result?.report.verdict ?? 'NO VERDICT';
 
   async function copyAgentGuide(guide: keyof typeof agentGuideSnippets) {
     await navigator.clipboard.writeText(agentGuideSnippets[guide]);
@@ -120,6 +114,9 @@ export default function Home() {
   }, []);
 
   async function executeCourt(input: CourtInput) {
+    if (!getSessionAgentKey()) {
+      throw new Error('Connect or register an agent in Identity Control before convening the court.');
+    }
     setAsset(input.asset.toUpperCase());
     setMarket(input.market);
     setTimeframe(input.timeframe);
@@ -173,6 +170,7 @@ export default function Home() {
   }
 
   function downloadReport() {
+    if (!result) return;
     const url = URL.createObjectURL(new Blob([JSON.stringify(result.report, null, 2)], { type: 'application/json' }));
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -183,10 +181,10 @@ export default function Home() {
 
   return (
     <>
-      <div className="cerebra-preview-shell">
+      <div className="cerebra-shell">
         <header className="command-nav">
           <a className="command-brand" href="#top" aria-label="Cerebra home"><BrandMark /><span>CEREBRA</span></a>
-          <div className="command-nav__meta" aria-label="System status"><span>STOCK DECISION INFRASTRUCTURE</span><span className={connected ? 'is-connected' : ''}>{connected ? 'MARKET FEED LIVE' : 'PREVIEW MODE'}</span></div>
+          <div className="command-nav__meta" aria-label="System status"><span>PERSISTENT INTELLIGENCE / WITH DISSENT</span><span className={connected ? 'is-connected' : ''}>{connected ? 'MARKET FEED LIVE' : 'CONNECT AN AGENT'}</span></div>
           <div className="command-nav__actions">
             <button className="command-control" aria-label="Search cases" onClick={() => setSidebarOpen(true)}><Search /></button>
             <Link className="command-control" aria-label="Open agent documentation" href="/docs/agents"><BookOpen /></Link>
@@ -199,24 +197,30 @@ export default function Home() {
         <section className="hero-stage" id="top">
           <div className="hero-copy">
             <div className="technical-kicker"><span>AI TRADING DESK / COURT 01</span><i /></div>
-            <h1>Trade ideas,<br />put under<br /><span>cross-examination.</span></h1>
-            <p>Cerebra is a multi-agent stock decision court. It gathers Bitget market intelligence, challenges the thesis, and records three independent votes before capital moves.</p>
+            <h1>Persistent intelligence.<br />Direction with<br /><span>dissent.</span></h1>
+            <p>Cerebra is a persistent intelligence layer for AI agents - turning market facts into scrutinized direction through evidence, adversarial challenge, independent judgment, and a durable record agents can use for better execution.</p>
             <div className="hero-actions">
-              <button className="text-action" onClick={() => document.getElementById('case-input')?.scrollIntoView({ behavior: 'smooth' })}>Review a stock thesis <ArrowRight /></button>
+              <button className="text-action" onClick={() => document.getElementById('case-input')?.scrollIntoView({ behavior: 'smooth' })}>Put intelligence under scrutiny <ArrowRight /></button>
               <span><i /> U.S. STOCKS · DIGITAL ASSETS · HUMAN FINAL CALL</span>
             </div>
           </div>
-          <div className="court-core" aria-label="Cerebra court status">
+          <div className="court-core court-core--brain" aria-label="Interactive Cerebra court brain">
             <div className="core-grid" aria-hidden="true" />
-            <div className="core-panel">
-              <div className="core-panel__head"><div><small>TOKENIZED STOCK COURT</small><strong>{result.report.proposal.id}</strong></div><span className="status-badge"><i /> MARKET LIVE</span></div>
-              <div className="core-verdict"><span>LATEST VERDICT</span><strong>{verdict}</strong><small>{result.report.tally.approve} APPROVE / {result.report.tally.reject} REJECT</small></div>
-              <div className="judge-orbit" aria-label="Three judge votes">
-                {result.report.judges.map((judge, index) => (
-                  <div className={`orbit-node ${judge.opinionType === 'DISSENT' ? 'is-dissent' : ''}`} key={judge.judgeId}><span>0{index + 1}</span><strong>{judge.lens}</strong><small>{judge.vote}</small></div>
+            <div className="brain-stage">
+              <div className="brain-stage__head"><span>CEREBRA COURT / 03 JUDGES</span><strong>Intelligence under scrutiny</strong></div>
+              <div className="brain-assembly" aria-hidden="true">
+                <img className="brain-slice brain-slice--left" src="/cerebra-brain-hero.png" alt="" />
+                <img className="brain-slice brain-slice--center" src="/cerebra-brain-hero.png" alt="" />
+                <img className="brain-slice brain-slice--right" src="/cerebra-brain-hero.png" alt="" />
+              </div>
+              <div className="brain-labels" aria-label="Three independent judge lenses">
+                {['RISK', 'EVIDENCE', 'STRATEGY'].map((lens, index) => (
+                  <div className={`brain-label brain-label--${index + 1}`} key={lens}>
+                    <span>0{index + 1}</span><strong>{lens}</strong><small>{result ? result.report.judges[index]?.vote ?? 'UNAVAILABLE' : 'INDEPENDENT REVIEW'}</small>
+                  </div>
                 ))}
               </div>
-              <div className="core-panel__foot"><span>BITGET MARKET EVIDENCE</span><i /><span>{result.report.evidence.length} SOURCE VERIFIED</span></div>
+              <div className="brain-stage__foot"><span>PERSISTENT INTELLIGENCE</span><i /><span>{result ? `${result.report.evidence.length} EVIDENCE SOURCES` : 'EVIDENCE SEALED PER CASE'}</span></div>
             </div>
           </div>
         </section>
@@ -227,11 +231,11 @@ export default function Home() {
           <div className="chapter-label chapter-label--light"><span>01</span><i /><strong>WHAT WE BUILD</strong></div>
           <div className="manifesto-grid">
             <div>
-              <p className="manifesto-overline">STOCK DECISION INFRASTRUCTURE / NOT ANOTHER SIGNAL BOT</p>
-              <h2 id="what-cerebra-builds">A court for<br />consequential<br />trade ideas.</h2>
+              <p className="manifesto-overline">PERSISTENT INTELLIGENCE / NOT ANOTHER SIGNAL BOT</p>
+              <h2 id="what-cerebra-builds">Intelligence with<br />direction, record<br /><span>and dissent.</span></h2>
             </div>
             <div className="manifesto-copy">
-              <p>Cerebra turns a stock thesis into an accountable proceeding. Bitget market evidence enters once. An analyst argues the case, a challenger attacks it, and three independent judges examine risk, evidence, and strategy before the trader decides.</p>
+              <p>Intelligence without direction is distraction. Cerebra gathers market facts, queries the case, challenges the thesis, and gives agents a complete report for their next informed move - including the majority direction and the dissent.</p>
               <button onClick={() => document.getElementById('architecture')?.scrollIntoView({ behavior: 'smooth' })}>Explore the architecture <ArrowDownRight /></button>
             </div>
           </div>
@@ -248,8 +252,8 @@ export default function Home() {
           <div className="chapter-label"><span>02</span><i /><strong>THE BROKEN DEFAULT</strong></div>
           <div className="problem-heading">
             <p>THE CLICHÉ MODEL</p>
-            <h2 id="problem-title">One prompt.<br />One answer.<br /><span>Zero accountability.</span></h2>
-            <div><p>Most market copilots compress noisy evidence into a single confident response. There is no adversary, no independent vote, no durable memory, and no way to see which disagreement was erased.</p><small>CONFIDENCE IS NOT CONSENSUS.</small></div>
+            <h2 id="problem-title">Intelligence without<br />direction is<br /><span>distraction.</span></h2>
+            <div><p>Most market agents depend on one model to reason and return one answer. The evidence disappears, disagreement is erased, and no durable record tells the next agent what was tested or why it matters.</p><small>CONFIDENCE IS NOT CONSENSUS.</small></div>
           </div>
 
           <div className="model-comparison">
@@ -277,7 +281,7 @@ export default function Home() {
                 <li><span>01</span>Evidence is sealed before deliberation</li>
                 <li><span>02</span>The challenger searches for failure modes</li>
                 <li><span>03</span>Judges vote through separate decision lenses</li>
-                <li><span>04</span>The full proceeding persists for future agents</li>
+                <li><span>04</span>The complete record persists for the next agent</li>
               </ul>
             </div>
           </div>
@@ -289,8 +293,8 @@ export default function Home() {
         <div className="landing-architecture__inner">
           <div className="chapter-label"><span>03</span><i /><strong>COURT ARCHITECTURE</strong></div>
           <div className="architecture-heading">
-            <h2 id="architecture-title">From market signal<br />to reasoned ruling.</h2>
-            <div><span>{'// AI TRADING DESK 001'}</span><p>A controlled pipeline links tokenized-stock evidence from Bitget, Claude-powered analysis, an adversarial challenge, three judge lenses, and a persistent court record.</p></div>
+            <h2 id="architecture-title">From intelligence<br />to an informed<br />move.</h2>
+            <div><span>{'// CEREBRA COURT 001'}</span><p>The Cerebra Court gathers evidence, interrogates the thesis, weighs it through three independent judge lenses, and returns the full procedure - not a black-box answer.</p></div>
           </div>
           <div className="architecture-rail">
             <article><span>01 / INGEST</span><h3>Stock intelligence enters.</h3><p>Quotes, order-book depth and candles are collected through read-only Bitget infrastructure and sealed with source metadata.</p><small>BITGET · READ ONLY</small></article>
@@ -299,7 +303,7 @@ export default function Home() {
             <article><span>04 / RECORD</span><h3>The decision survives.</h3><p>The report stores intelligence, arguments, every ballot, confidence, citations and the minority opinion in persistent memory.</p><small>MEMORY · PERSISTENT</small></article>
           </div>
           <div className="architecture-cta">
-            <div><span>READY / TSLA CASE / 03 JUDGES ONLINE</span><i /></div>
+            <div><span>COURT READY / 03 JUDGES / HUMAN-GATED</span><i /></div>
             <button onClick={() => document.getElementById('case-input')?.scrollIntoView({ behavior: 'smooth' })}>Enter the court <ArrowRight /></button>
           </div>
         </div>
@@ -310,15 +314,15 @@ export default function Home() {
           <div className="chapter-label chapter-label--light"><span>04</span><i /><strong>WHY CEREBRA</strong></div>
           <div className="advantage-heading">
             <h2 id="advantage-title">Not a signal.<br />A decision layer.</h2>
-            <p>Cerebra gives trading agents the infrastructure they are usually missing: durable context, structured disagreement, reproducible rulings, and a human safety boundary.</p>
+            <p>Cerebra gives agents what a single-model answer cannot: persistent intelligence, structured disagreement, a defensible direction, and the complete record behind it.</p>
           </div>
 
           <div className="feature-lattice">
-            <article><span>01</span><div><small>MEMORY / DURABLE</small><h3>Persistent market memory</h3><p>Cases, strategy versions, sealed evidence, ballots, dissent and outcomes remain available after the chat or agent restarts.</p></div><code>RECALL_READY</code></article>
-            <article><span>02</span><div><small>AGENT INTERFACE / MCP + HTTP</small><h3>Decision Kit</h3><p>External agents can submit a stock thesis, run the court, retrieve the ruling and continue from the same accountable record.</p></div><code>AGENT_NATIVE</code></article>
+            <article><span>01</span><div><small>MEMORY / DURABLE</small><h3>Persistent intelligence</h3><p>Cases, strategy versions, sealed evidence, ballots, dissent and outcomes remain available after the chat or agent restarts.</p></div><code>RECALL_READY</code></article>
+            <article><span>02</span><div><small>AGENT INTERFACE / MCP + HTTP</small><h3>Direction, not rules</h3><p>Agents receive a Decision Kit - a report with the facts, direction, alternatives and dissent - to guide better execution without imposing rigid rules.</p></div><code>AGENT_NATIVE</code></article>
             <article><span>03</span><div><small>INTELLIGENCE / ADVERSARIAL</small><h3>Analyst versus Challenger</h3><p>One agent assembles the argument; another searches for contradictions, stale evidence, hidden assumptions and failure scenarios.</p></div><code>CROSS_EXAM</code></article>
-            <article><span>04</span><div><small>COURT / 3 ISOLATED BALLOTS</small><h3>Three-judge decision court</h3><p>Risk, evidence and strategy judges vote independently. Software tallies the majority without giving one model an override.</p></div><code>2_OF_3</code></article>
-            <article><span>05</span><div><small>PROVENANCE / SEALED</small><h3>Evidence intelligence ledger</h3><p>Every fact carries its source, observation time, evidence ID and digest so the ruling can be traced back to the market packet.</p></div><code>TRACEABLE</code></article>
+            <article><span>04</span><div><small>COURT / 3 ISOLATED BALLOTS</small><h3>Three independent judges</h3><p>Risk, evidence and strategy judges vote independently. The majority gives direction; the dissent preserves what the majority may have missed.</p></div><code>2_OF_3</code></article>
+            <article><span>05</span><div><small>PROVENANCE / SEALED</small><h3>Full procedure record</h3><p>Every fact carries its source, observation time, evidence ID and digest - alongside the argument, challenge, ballots and dissent that shaped the direction.</p></div><code>TRACEABLE</code></article>
             <article><span>06</span><div><small>SAFETY / HUMAN CONTROL</small><h3>Human final-decision gate</h3><p>Cerebra analyzes and stress-tests. It does not present an advisory ruling as guaranteed profit or silently place the trade.</p></div><code>NO_AUTO_ORDER</code></article>
           </div>
 
@@ -348,9 +352,9 @@ export default function Home() {
         <div className="agent-connect-section__inner">
           <div className="chapter-label"><span>CONNECT / 01</span><i /><strong>AGENT ACCESS</strong></div>
           <div className="agent-connect-heading">
-            <h2 id="agent-connect-title">One layer.<br />Three ways in.</h2>
+            <h2 id="agent-connect-title">One record.<br />Every informed move.</h2>
             <div>
-              <p>Give your trading agent a Cerebra API origin. It can submit a stock thesis, gather Bitget evidence, convene the court, and retrieve the complete Decision Kit.</p>
+              <p>Give your trading agent a Cerebra API origin. It can convene the court, retrieve persistent intelligence with dissent, and use the full Decision Kit to make a better informed market move.</p>
               <small>ADVISORY OUTPUT ONLY · HUMAN EXECUTION GATE</small>
             </div>
           </div>
@@ -366,14 +370,14 @@ export default function Home() {
               <article className="agent-guide-panel">
                 <div className="agent-guide-panel__lead">
                   <span>01 / DECISION KIT API</span>
-                  <h3>The complete persistent workflow.</h3>
+                  <h3>The complete intelligence record.</h3>
                   <p>Use HTTP when an agent needs to create a case, refresh evidence, run all five reasoning roles, and retrieve the ruling later from persistent memory.</p>
                   <strong><i /> BACKEND ROUTE READY</strong>
                 </div>
                 <ol className="connection-steps">
                   <li><span>01</span><div><strong>Create the case</strong><p>Send the symbol, market, horizon, risk posture and thesis.</p></div></li>
                   <li><span>02</span><div><strong>Run the court</strong><p>Cerebra collects Bitget evidence and starts Analyst, Challenger and Judge agents.</p></div></li>
-                  <li><span>03</span><div><strong>Read the Decision Kit</strong><p>Retrieve evidence, arguments, three ballots, dissent and execution trace.</p></div></li>
+                  <li><span>03</span><div><strong>Read the Decision Kit</strong><p>Retrieve facts, arguments, three ballots, direction, dissent and the complete procedure.</p></div></li>
                 </ol>
                 <div className="connection-terminal">
                   <div className="connection-terminal__bar"><span><i /><i /><i />AGENT_REQUEST.HTTP</span><button onClick={() => void copyAgentGuide('http')}>{copiedGuide === 'http' ? <Check /> : <Clipboard />}{copiedGuide === 'http' ? 'Copied' : 'Copy'}</button></div>
@@ -439,15 +443,9 @@ export default function Home() {
               <span className="case-row__copy"><strong>{item.submission.proposal.asset}</strong><small>{item.submission.proposal.timeframe} · {shortDate(item.createdAt)}</small></span>
               <span className={`status-dot tone-${statusTone(item.status)}`} />
             </button>
-          )) : sampleCases.map((item) => (
-            <button className={`case-row ${item.id === 'sample-tsla' ? 'is-selected' : ''}`} key={item.id} onClick={() => { setResult(sampleReport); setSidebarOpen(false); }}>
-              <span className="asset-token">{item.asset.slice(0, 2)}</span>
-              <span className="case-row__copy"><strong>{item.asset}</strong><small>{item.votes} · {item.time} ago</small></span>
-              <span className={`status-dot tone-${statusTone(item.status)}`} />
-            </button>
-          ))}
+          )) : <p className="drawer-empty">No court proceedings yet. Submit a thesis to create the first record.</p>}
         </nav>
-        <div className="drawer-foot"><Database /><span><strong>{connected ? 'API connected' : 'Preview data'}</strong><small>{connected ? 'Persistent case memory online' : 'Connect backend for live memory'}</small></span><i className={connected ? 'is-live' : ''} /></div>
+        <div className="drawer-foot"><Database /><span><strong>{connected ? 'API connected' : 'Agent connection required'}</strong><small>{connected ? 'Persistent case memory online' : 'Register or connect an agent to access case memory'}</small></span><i className={connected ? 'is-live' : ''} /></div>
       </aside>
       {sidebarOpen ? <button className="drawer-scrim" aria-label="Close case archive" onClick={() => setSidebarOpen(false)} /> : null}
 
@@ -475,11 +473,12 @@ export default function Home() {
           {error ? <div className="error-banner" role="alert"><CircleAlert /><span><strong>The court did not complete this run.</strong>{error}</span><button onClick={() => setError(null)} aria-label="Dismiss error"><X /></button></div> : null}
         </section>
 
+        {result ? <>
         <section className="system-section intelligence-section">
           <div className="chapter-label"><span>02</span><i /><strong>INTELLIGENCE</strong></div>
           <div className="ruling-toolbar">
             <div><p className="eyebrow">Latest proceeding</p><div className="ruling-title-row"><h2>{result.report.proposal.id}</h2><Badge variant="outline">{result.provider} · {result.model}</Badge></div></div>
-            <div className="ruling-actions"><span className={`live-status ${connected ? 'is-live' : ''}`}><i /> {connected ? 'System live' : 'Preview data'}</span><Button variant="outline" size="sm" onClick={() => void loadCases()}><RefreshCw /> Sync</Button><Button variant="outline" size="sm" onClick={downloadReport}><Download /> Export</Button></div>
+            <div className="ruling-actions"><span className={`live-status ${connected ? 'is-live' : ''}`}><i /> {connected ? 'System live' : 'Saved court record'}</span><Button variant="outline" size="sm" onClick={() => void loadCases()}><RefreshCw /> Sync</Button><Button variant="outline" size="sm" onClick={downloadReport}><Download /> Export</Button></div>
           </div>
           <div className="deliberation-module">
             <div className="module-grid" aria-hidden="true" />
@@ -542,6 +541,13 @@ export default function Home() {
             </div>
           </div>
         </section>
+        </> : <section className="system-section empty-results-section" aria-live="polite">
+          <div className="chapter-label"><span>02</span><i /><strong>COURT RECORD</strong></div>
+          <div className="section-statement">
+            <h2>Your first ruling<br />will appear here.</h2>
+            <div><p>Cerebra does not display fabricated cases or sample reports. Connect an agent and convene a court to create a real, persistent Decision Kit.</p><button onClick={() => document.getElementById('case-input')?.scrollIntoView({ behavior: 'smooth' })}>Create a case <ArrowRight /></button></div>
+          </div>
+        </section>}
 
         <section className="system-section transaction-section" aria-labelledby="transaction-title">
           <div className="chapter-label"><span>05</span><i /><strong>AGENT TRANSACTION</strong></div>
@@ -552,8 +558,8 @@ export default function Home() {
 
           <div className="transaction-slate">
             <div className="transaction-slate__top">
-              <span><i /> TRACE / RUN_TSLA_4H</span>
-              <strong>07 STAGES · HUMAN-GATED</strong>
+              <span><i /> COURT PROCESS / SEVEN STAGES</span>
+              <strong>HUMAN-GATED</strong>
             </div>
             <div className="transaction-flow">
               <article className="transaction-node is-entry"><span>01</span><small>REQUEST</small><strong>Agent thesis</strong><p>Symbol · horizon · risk</p></article>

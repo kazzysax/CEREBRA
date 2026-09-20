@@ -1,6 +1,8 @@
 import type { CaseSubmission } from "../agents/contracts.js";
 import type { CourtRunResult } from "../court/run-court.js";
 import type { EvidenceReference, RulingReport } from "../domain/contracts.js";
+import type { CourtPrecedent, PrecedentQuery } from "../court/precedent.js";
+import type { JudgeCalibration, OutcomeRecord } from "../outcomes/contracts.js";
 
 export type EvidenceMode = "BITGET" | "MANUAL";
 export type CaseStatus = "READY" | "RUNNING" | "COMPLETED" | "FAILED";
@@ -47,5 +49,9 @@ export interface CaseRepository {
   failRun(id: string, error: string, completedAt: string): Promise<void>;
   getRun(id: string, agentId?: string | null): Promise<CourtRunRecord | null>;
   getReport(runId: string, agentId?: string | null): Promise<StoredReport | null>;
+  findPrecedents(query: PrecedentQuery): Promise<CourtPrecedent[]>;
+  saveOutcome(record: OutcomeRecord): Promise<OutcomeRecord>;
+  listOutcomes(runId: string, agentId?: string | null): Promise<OutcomeRecord[]>;
+  getJudgeCalibration(agentId: string): Promise<JudgeCalibration[]>;
   close(): Promise<void>;
 }

@@ -46,6 +46,20 @@ export type CourtJob = {
 };
 export type CourtRunRecord = { id: string; status: string; result: CourtRunResult | null; error: string | null };
 
+const agentKeyStorage = 'cerebra.agent-key.v1';
+
+export function getSessionAgentKey() {
+  return typeof window === 'undefined' ? null : window.sessionStorage.getItem(agentKeyStorage);
+}
+
+export function saveSessionAgentKey(apiKey: string) {
+  window.sessionStorage.setItem(agentKeyStorage, apiKey);
+}
+
+export function clearSessionAgentKey() {
+  window.sessionStorage.removeItem(agentKeyStorage);
+}
+
 export const sampleReport: CourtRunResult = {
   runId: 'run-demo-tsla-4h', startedAt: '2026-09-17T08:36:12.000Z', completedAt: '2026-09-17T08:36:26.000Z',
   provider: 'claude', model: 'claude-sonnet',
@@ -91,6 +105,10 @@ export const sampleReport: CourtRunResult = {
 export async function cerebraApi<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  if (!headers.has('authorization')) {
+    const apiKey = getSessionAgentKey();
+    if (apiKey) headers.set('x-cerebra-agent-key', apiKey);
+  }
   const response = await fetch('/api/cerebra' + path, { ...init, headers });
   const body: unknown = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -103,7 +121,7 @@ export async function cerebraApi<T>(path: string, init?: RequestInit): Promise<T
 }
 
 export function agentHeaders(apiKey: string): HeadersInit {
-  return { authorization: 'Bearer ' + apiKey };
+  return { 'x-cerebra-agent-key': apiKey };
 }
 
 export function shortDate(value: string) {

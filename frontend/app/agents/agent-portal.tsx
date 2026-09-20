@@ -7,7 +7,7 @@ import { BrandMark } from '@/components/court-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { agentHeaders, cerebraApi, shortDate } from '@/lib/cerebra';
+import { agentHeaders, cerebraApi, clearSessionAgentKey, saveSessionAgentKey, shortDate } from '@/lib/cerebra';
 
 type Agent = { id: string; name: string; description: string; capabilities: string[]; status: 'ACTIVE' | 'REVOKED'; keyPrefix: string; createdAt: string; lastSeenAt: string | null };
 type Strategy = { id: string; asset: string; timeframe: string; thesis: string; version: number; status: 'ACTIVE' | 'SUPERSEDED'; createdAt: string };
@@ -55,7 +55,7 @@ export function AgentPortal() {
     event.preventDefault(); setBusy(true); setError(null); setNotice(null);
     try {
       const profile = await cerebraApi<Agent>('/v1/agents/me', { headers: agentHeaders(apiKey) });
-      setAgent(profile); setIssuedKey(null); await loadMemory(apiKey); setNotice('Identity verified. Durable memory is available.');
+      setAgent(profile); saveSessionAgentKey(apiKey); setIssuedKey(null); await loadMemory(apiKey); setNotice('Identity verified. Durable memory is available.');
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Agent authentication failed.'); }
     finally { setBusy(false); }
   }
@@ -68,7 +68,7 @@ export function AgentPortal() {
         headers: { 'x-cerebra-registration-token': registrationToken },
         body: JSON.stringify({ name, description, capabilities: ['stock-research', 'risk-review', 'persistent-memory'] }),
       });
-      setAgent(response.agent); setApiKey(response.apiKey); setIssuedKey(response.apiKey);
+      setAgent(response.agent); setApiKey(response.apiKey); saveSessionAgentKey(response.apiKey); setIssuedKey(response.apiKey);
       await loadMemory(response.apiKey); setNotice('Agent registered. Copy the key now; Cerebra will not show it again.');
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Agent registration failed.'); }
     finally { setBusy(false); }
@@ -78,7 +78,7 @@ export function AgentPortal() {
     setBusy(true); setError(null);
     try {
       const response = await cerebraApi<{ agent: Agent; apiKey: string }>('/v1/agents/me/keys/rotate', { method: 'POST', headers, body: '{}' });
-      setAgent(response.agent); setApiKey(response.apiKey); setIssuedKey(response.apiKey); setNotice('The previous key is invalid. Copy the replacement now.');
+      setAgent(response.agent); setApiKey(response.apiKey); saveSessionAgentKey(response.apiKey); setIssuedKey(response.apiKey); setNotice('The previous key is invalid. Copy the replacement now.');
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Key rotation failed.'); }
     finally { setBusy(false); }
   }
@@ -87,7 +87,7 @@ export function AgentPortal() {
     setBusy(true); setError(null);
     try {
       await cerebraApi('/v1/agents/me/revoke', { method: 'POST', headers, body: '{}' });
-      setAgent(null); setApiKey(''); setIssuedKey(null); setStrategies([]); setImpressions([]); setCheckpoint(null); setNotice('Agent revoked. Its key can no longer access Cerebra.');
+      setAgent(null); setApiKey(''); clearSessionAgentKey(); setIssuedKey(null); setStrategies([]); setImpressions([]); setCheckpoint(null); setNotice('Agent revoked. Its key can no longer access Cerebra.');
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Revocation failed.'); }
     finally { setBusy(false); }
   }

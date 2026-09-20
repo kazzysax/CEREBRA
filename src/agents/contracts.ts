@@ -8,6 +8,8 @@ import {
   type JudgeId,
   type JudgeLens,
 } from "../domain/contracts.js";
+import type { CourtDoctrine } from "../court/doctrine.js";
+import type { CourtPrecedent } from "../court/precedent.js";
 
 export const proposalSchema = z.object({
   id: z.string().trim().min(1).optional(),
@@ -80,11 +82,13 @@ export type ModelCall<T> = {
 
 export type AnalystContext = {
   submission: CaseSubmission;
+  precedents: CourtPrecedent[];
 };
 
 export type ChallengerContext = {
   submission: CaseSubmission;
   analystCase: AnalystCase;
+  precedents: CourtPrecedent[];
 };
 
 export type JudgeContext = {
@@ -93,6 +97,8 @@ export type JudgeContext = {
   challenge: Challenge;
   judgeId: JudgeId;
   lens: JudgeLens;
+  doctrine: CourtDoctrine;
+  precedents: CourtPrecedent[];
 };
 
 export interface CourtModelProvider {

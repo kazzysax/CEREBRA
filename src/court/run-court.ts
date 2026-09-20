@@ -15,6 +15,8 @@ import {
   type RulingReport,
 } from "../domain/contracts.js";
 import { buildRulingReport } from "../domain/ruling-engine.js";
+import { advisoryDoctrineV1, type CourtDoctrine } from "./doctrine.js";
+import type { CourtPrecedent } from "./precedent.js";
 
 export type CourtTraceEntry = {
   stage: "ANALYST" | "CHALLENGER" | "JUDGE";
@@ -36,11 +38,14 @@ export type CourtRunResult = {
   challenge: Challenge;
   report: RulingReport;
   trace: CourtTraceEntry[];
+  precedents: CourtPrecedent[];
 };
 
 type RunCourtOptions = {
   now?: (() => Date) | undefined;
   idFactory?: (() => string) | undefined;
+  doctrine?: CourtDoctrine | undefined;
+  precedents?: CourtPrecedent[] | undefined;
 };
 
 const emptyUsage: ModelUsage = {
@@ -114,11 +119,13 @@ export async function runCourt(
   const submission = caseSubmissionSchema.parse(rawSubmission);
   const now = options.now ?? (() => new Date());
   const idFactory = options.idFactory ?? randomUUID;
+  const doctrine = options.doctrine ?? advisoryDoctrineV1;
+  const precedents = options.precedents ?? [];
   const runId = idFactory();
   const startedAt = now().toISOString();
   const trace: CourtTraceEntry[] = [];
 
-  const analystCall = await provider.runAnalyst({ submission });
+  const analystCall = await provider.runAnalyst({ submission, precedents });
   trace.push(successfulTrace("ANALYST", null, analystCall));
   assertKnownCitations(
     submission,
@@ -129,6 +136,7 @@ export async function runCourt(
   const challengerCall = await provider.runChallenger({
     submission,
     analystCase: analystCall.output,
+    precedents,
   });
   trace.push(successfulTrace("CHALLENGER", null, challengerCall));
   assertKnownCitations(
@@ -146,6 +154,8 @@ export async function runCourt(
         challenge: challengerCall.output,
         judgeId: seat.judgeId,
         lens: seat.lens,
+        doctrine,
+        precedents,
       }),
     })),
   );
@@ -210,6 +220,17 @@ export async function runCourt(
       violations: [],
     },
   });
+  report.doctrine = {
+    id: doctrine.id,
+    version: doctrine.version,
+    title: doctrine.title,
+    principles: [...doctrine.principles],
+    judgeMandates: {
+      "judge-risk": [...doctrine.judgeMandates["judge-risk"]],
+      "judge-evidence": [...doctrine.judgeMandates["judge-evidence"]],
+      "judge-strategy": [...doctrine.judgeMandates["judge-strategy"]],
+    },
+  };
 
   return {
     runId,
@@ -221,5 +242,6 @@ export async function runCourt(
     challenge: challengerCall.output,
     report,
     trace,
+    precedents,
   };
 }

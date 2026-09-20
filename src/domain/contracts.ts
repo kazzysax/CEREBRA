@@ -116,6 +116,17 @@ export const rulingReportSchema = z.object({
     inputHash: z.string().min(1),
     errors: z.array(z.string()),
   }),
+  doctrine: z.object({
+    id: z.string().min(1),
+    version: z.string().min(1),
+    title: z.string().min(1),
+    principles: z.array(z.string().min(1)),
+    judgeMandates: z.object({
+      "judge-risk": z.array(z.string().min(1)),
+      "judge-evidence": z.array(z.string().min(1)),
+      "judge-strategy": z.array(z.string().min(1)),
+    }),
+  }).optional(),
 });
 export type RulingReport = z.infer<typeof rulingReportSchema>;
 

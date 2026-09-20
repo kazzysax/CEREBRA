@@ -22,6 +22,7 @@ import type { CourtJobRepository } from "./jobs/contracts.js";
 import { createMemoryCourtJobRepository } from "./jobs/memory-repository.js";
 import { registerJobRoutes } from "./jobs/register-routes.js";
 import { createCourtJobWorker } from "./jobs/worker.js";
+import { registerOutcomeRoutes } from "./outcomes/register-routes.js";
 
 export async function buildApp(options: {
   host?: string | undefined;
@@ -113,6 +114,7 @@ export async function buildApp(options: {
     auth,
     maxAttempts: options.jobs?.maxAttempts,
   });
+  registerOutcomeRoutes(app, { repository, auth });
   app.post("/v1/court/runs", async (request, reply) => {
     const agent = await resolveAgent(request, reply, auth);
     if (agent === undefined) return;

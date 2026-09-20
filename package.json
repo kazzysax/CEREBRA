@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node dist/src/index.js",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').cpSync('migrations', 'dist/migrations', { recursive: true })\"",
     "db:migrate": "tsx src/storage/migrate.ts",
     "frontend:install": "npm --prefix frontend install",
     "frontend:dev": "npm --prefix frontend run dev",

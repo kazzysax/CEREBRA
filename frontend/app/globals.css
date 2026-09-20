@@ -35,15 +35,12 @@ button,input,textarea,select { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 ::selection { color: #fff; background: rgb(22 139 255 / 58%); }
 
-.brand-mark { position: relative; display: grid; width: 30px; height: 30px; place-items: center; overflow: hidden; border: 1px solid rgb(168 227 255 / 18%); border-radius: 9px; background: #08131f; }
-.brand-mark::before,.brand-mark::after { content: ''; position: absolute; width: 1px; height: 100%; background: rgb(168 227 255 / 8%); }
-.brand-mark::before { transform: rotate(45deg); } .brand-mark::after { transform: rotate(-45deg); }
-.brand-mark span { position: absolute; width: 3px; height: 3px; border-radius: 1px; background: var(--energy); box-shadow: 0 0 9px var(--blue); }
-.brand-mark span:first-child { transform: translate(-7px,-4px); } .brand-mark span:nth-child(2) { transform: translate(6px,-7px); } .brand-mark span:last-child { transform: translate(3px,7px); }
+.brand-mark { position: relative; display: inline-grid; width: 30px; height: 30px; place-items: center; }
+.brand-mark img { width: 100%; height: 100%; object-fit: contain; }
 
-.cerebra-preview-shell { position: relative; min-height: 100svh; overflow: hidden; background: radial-gradient(circle at 77% 43%,rgb(0 168 255 / 13%),transparent 30%),radial-gradient(circle at 18% 12%,rgb(22 139 255 / 5%),transparent 22%),linear-gradient(180deg,#050a12,#03070d); }
-.cerebra-preview-shell::before { content: 'X 002.184    Y 119.002                    // NETWORK 01'; position: absolute; inset: 112px var(--gutter) auto; height: 56%; pointer-events: none; color: rgb(168 227 255 / 9%); font: 500 8px/1 var(--font-geist-mono); letter-spacing: .14em; background-image: linear-gradient(rgb(168 227 255 / 2.5%) 1px,transparent 1px),linear-gradient(90deg,rgb(168 227 255 / 2.5%) 1px,transparent 1px); background-size: 64px 64px; mask-image: linear-gradient(to bottom,black,transparent); }
-.cerebra-preview-shell::after { content: ''; position: absolute; z-index: 0; left: 51%; bottom: -34%; width: 82%; height: 72%; opacity: .21; transform: perspective(500px) rotateX(66deg); transform-origin: center bottom; background-image: linear-gradient(rgb(0 168 255 / 14%) 1px,transparent 1px),linear-gradient(90deg,rgb(0 168 255 / 14%) 1px,transparent 1px); background-size: 54px 54px; mask-image: radial-gradient(ellipse,black,transparent 70%); }
+.cerebra-shell { position: relative; min-height: 100svh; overflow: hidden; background: radial-gradient(circle at 77% 43%,rgb(0 168 255 / 13%),transparent 30%),radial-gradient(circle at 18% 12%,rgb(22 139 255 / 5%),transparent 22%),linear-gradient(180deg,#050a12,#03070d); }
+.cerebra-shell::before { content: 'X 002.184    Y 119.002                    // NETWORK 01'; position: absolute; inset: 112px var(--gutter) auto; height: 56%; pointer-events: none; color: rgb(168 227 255 / 9%); font: 500 8px/1 var(--font-geist-mono); letter-spacing: .14em; background-image: linear-gradient(rgb(168 227 255 / 2.5%) 1px,transparent 1px),linear-gradient(90deg,rgb(168 227 255 / 2.5%) 1px,transparent 1px); background-size: 64px 64px; mask-image: linear-gradient(to bottom,black,transparent); }
+.cerebra-shell::after { content: ''; position: absolute; z-index: 0; left: 51%; bottom: -34%; width: 82%; height: 72%; opacity: .21; transform: perspective(500px) rotateX(66deg); transform-origin: center bottom; background-image: linear-gradient(rgb(0 168 255 / 14%) 1px,transparent 1px),linear-gradient(90deg,rgb(0 168 255 / 14%) 1px,transparent 1px); background-size: 54px 54px; mask-image: radial-gradient(ellipse,black,transparent 70%); }
 
 .command-nav { position: relative; z-index: 5; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: min(1440px,calc(100% - (var(--gutter) * 2))); min-height: 102px; margin: 0 auto; border-bottom: 1px solid var(--line); }
 .command-brand { display: inline-flex; align-items: center; gap: 12px; width: fit-content; color: var(--white); text-decoration: none; font-size: 15px; font-weight: 720; letter-spacing: .13em; }
@@ -74,32 +71,36 @@ button { -webkit-tap-highlight-color: transparent; }
 .hero-actions > span { display: inline-flex; align-items: center; gap: 8px; color: #5f7184; font: 520 8px/1 var(--font-geist-mono); letter-spacing: .11em; }
 .hero-actions > span i { width: 5px; height: 5px; border-radius: 50%; background: var(--energy); box-shadow: 0 0 11px var(--energy); }
 
-.court-core { position: relative; align-self: center; min-height: 570px; padding: 50px; border: 1px solid var(--line); border-radius: 22px; background: linear-gradient(145deg,#06101a,#0a2944 48%,#07121e); box-shadow: inset 0 1px rgb(255 255 255 / 5%),0 36px 90px rgb(0 0 0 / 38%); transition: transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s; transform: perspective(1100px) rotateY(-2deg) rotateX(1deg); }
+.court-core { position: relative; align-self: center; min-height: 570px; padding: 26px; overflow: hidden; border: 1px solid var(--line); border-radius: 22px; background: radial-gradient(circle at 50% 48%,rgb(0 168 255 / 22%),transparent 36%),linear-gradient(145deg,#06101a,#0a2944 48%,#07121e); box-shadow: inset 0 1px rgb(255 255 255 / 5%),0 36px 90px rgb(0 0 0 / 38%); transition: transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s; transform: perspective(1100px) rotateY(-2deg) rotateX(1deg); }
 .court-core:hover { transform: perspective(1100px) rotateY(0deg) rotateX(0deg) translateY(-4px); box-shadow: inset 0 1px rgb(255 255 255 / 5%),0 44px 110px rgb(0 0 0 / 48%); }
 .court-core::before,.court-core::after { content: ''; position: absolute; pointer-events: none; border-radius: 50%; }
 .court-core::before { inset: -44px; border: 1px solid rgb(0 168 255 / 12%); clip-path: inset(0 0 44% 42%); transform: rotate(-12deg); }
 .court-core::after { width: 190px; height: 190px; right: -40px; top: -40px; background: rgb(0 168 255 / 24%); filter: blur(65px); }
 .core-grid,.module-grid { position: absolute; inset: 0; opacity: .28; background-image: radial-gradient(circle,rgb(168 227 255 / 32%) 1px,transparent 1.2px); background-size: 18px 18px; mask-image: linear-gradient(135deg,black,transparent 72%); }
-.core-panel { position: relative; z-index: 2; display: flex; min-height: 470px; flex-direction: column; padding: 28px; border: 1px solid rgb(168 227 255 / 13%); border-radius: 17px; background: rgb(3 7 13 / 89%); box-shadow: inset 0 1px rgb(255 255 255 / 5%),0 20px 70px rgb(0 0 0 / 28%); }
-.core-panel::before,.core-panel::after { content: ''; position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--energy); box-shadow: 0 0 14px var(--energy); }
-.core-panel::before { left: -4px; top: 48%; } .core-panel::after { right: -4px; top: 22%; }
-.core-panel__head,.core-panel__foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.core-panel__head > div { display: flex; flex-direction: column; gap: 7px; }
-.core-panel__head small,.core-verdict span,.core-panel__foot { color: #687b8e; font: 540 8px/1 var(--font-geist-mono); letter-spacing: .14em; }
-.core-panel__head strong { font-size: 17px; font-weight: 560; letter-spacing: -.025em; }
-.status-badge { display: inline-flex; align-items: center; gap: 7px; padding: 7px 9px; border-radius: 6px; color: var(--ice); background: rgb(0 168 255 / 10%); font: 620 8px/1 var(--font-geist-mono); letter-spacing: .11em; }
-.status-badge i { width: 5px; height: 5px; border-radius: 50%; background: var(--ice); box-shadow: 0 0 10px var(--energy); }
-.core-verdict { display: flex; flex-direction: column; gap: 8px; margin: 66px 0 44px; }
-.core-verdict strong { color: var(--white); font-size: clamp(50px,5vw,76px); line-height: .92; letter-spacing: -.065em; text-shadow: 0 0 34px rgb(0 168 255 / 15%); }
-.core-verdict small { color: var(--ice); font: 540 8px/1 var(--font-geist-mono); letter-spacing: .14em; }
-.judge-orbit { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; border: 1px solid var(--line); background: var(--line); }
-.orbit-node { display: flex; min-width: 0; flex-direction: column; gap: 8px; padding: 14px 12px; background: #060b12; }
-.orbit-node span,.orbit-node small { color: #607285; font: 520 8px/1 var(--font-geist-mono); letter-spacing: .09em; }
-.orbit-node strong { font-size: 10px; font-weight: 650; letter-spacing: .08em; }
-.orbit-node small { color: var(--ice); }
-.core-panel__foot { margin-top: auto; padding-top: 24px; }
-.core-panel__foot i { height: 1px; flex: 1; background: linear-gradient(90deg,rgb(0 168 255 / 55%),rgb(168 227 255 / 7%)); }
-/* Narrative landing */
+.brain-stage { position: relative; z-index: 2; min-height: 516px; overflow: hidden; border: 1px solid rgb(168 227 255 / 15%); border-radius: 17px; background: radial-gradient(ellipse at 50% 52%,rgb(0 171 255 / 18%),transparent 46%),rgb(3 7 13 / 88%); box-shadow: inset 0 1px rgb(255 255 255 / 5%),0 20px 70px rgb(0 0 0 / 28%); }
+.brain-stage::before { content: ''; position: absolute; inset: 16% 10%; border: 1px solid rgb(0 168 255 / 18%); border-radius: 50%; transform: rotate(-22deg); }
+.brain-stage__head,.brain-stage__foot { position: absolute; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; left: 26px; right: 26px; color: #718598; font: 540 8px/1 var(--font-geist-mono); letter-spacing: .13em; }
+.brain-stage__head { top: 26px; } .brain-stage__head strong { color: #c6e3f1; font: 600 10px/1 var(--font-geist-sans); letter-spacing: -.01em; }
+.brain-stage__foot { bottom: 25px; } .brain-stage__foot i { height: 1px; flex: 1; background: linear-gradient(90deg,rgb(0 168 255 / 58%),rgb(168 227 255 / 7%)); }
+.brain-assembly { position: absolute; z-index: 2; left: 50%; top: 50%; width: min(88%,460px); aspect-ratio: 1; transform: translate(-50%,-47%); filter: drop-shadow(0 30px 24px rgb(0 0 0 / 48%)); animation: brain-turn 13s ease-in-out infinite; }
+.brain-slice { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transition: transform .72s cubic-bezier(.16,1,.3,1),filter .72s; will-change: transform; }
+.brain-slice--left { clip-path: polygon(0 0,40% 0,47% 100%,0 100%); }
+.brain-slice--center { clip-path: polygon(36% 0,65% 0,64% 100%,42% 100%); }
+.brain-slice--right { clip-path: polygon(60% 0,100% 0,100% 100%,59% 100%); }
+.court-core--brain:hover .brain-slice--left,.brain-stage:focus-within .brain-slice--left { transform: translate(-9%,-2%) rotate(-3deg); filter: brightness(1.18); }
+.court-core--brain:hover .brain-slice--center,.brain-stage:focus-within .brain-slice--center { transform: translateY(-8%) scale(1.03); filter: brightness(1.26); }
+.court-core--brain:hover .brain-slice--right,.brain-stage:focus-within .brain-slice--right { transform: translate(9%,2%) rotate(3deg); filter: brightness(1.18); }
+.brain-labels { position: absolute; z-index: 4; inset: 0; pointer-events: none; }
+.brain-label { position: absolute; display: grid; grid-template-columns: 24px auto; column-gap: 8px; min-width: 122px; padding: 8px 10px; border: 1px solid rgb(168 227 255 / 15%); background: rgb(4 13 22 / 80%); box-shadow: 0 9px 25px rgb(0 0 0 / 22%); }
+.brain-label::before { content: ''; position: absolute; width: 26px; height: 1px; background: rgb(0 188 255 / 55%); }
+.brain-label span,.brain-label small { color: #75d9ff; font: 540 7px/1 var(--font-geist-mono); letter-spacing: .1em; }
+.brain-label strong { overflow: hidden; color: #e0f3ff; font-size: 9px; font-weight: 650; letter-spacing: .06em; text-overflow: ellipsis; white-space: nowrap; }
+.brain-label small { grid-column: 2; margin-top: 4px; color: #7d98aa; } .brain-label.is-dissent small { color: #a5d1e8; }
+.brain-label--1 { left: 22px; top: 43%; } .brain-label--1::before { right: -26px; top: 50%; }
+.brain-label--2 { left: 50%; top: 31%; transform: translateX(-50%); } .brain-label--2::before { left: 50%; top: -24px; width: 1px; height: 24px; }
+.brain-label--3 { right: 22px; top: 43%; } .brain-label--3::before { left: -26px; top: 50%; }
+.brain-activator { position: absolute; z-index: 6; inset: 0; border: 0; cursor: pointer; background: transparent; } .brain-activator:focus-visible { outline: 1px solid var(--ice); outline-offset: -6px; border-radius: 12px; }
+@keyframes brain-turn { 0%,100% { transform: translate(-50%,-47%) rotateY(-7deg) rotateZ(-1.5deg); } 50% { transform: translate(-50%,-47%) rotateY(7deg) rotateZ(1.5deg); } }\r\n/* Narrative landing */
 .landing-manifesto { position: relative; z-index: 2; color: #07111d; background: #eef7fc; }
 .landing-manifesto::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .36; background-image: linear-gradient(rgb(7 17 29 / 4%) 1px,transparent 1px),linear-gradient(90deg,rgb(7 17 29 / 4%) 1px,transparent 1px); background-size: 80px 80px; mask-image: linear-gradient(90deg,black,transparent 75%); }
 .landing-manifesto__inner,.landing-architecture__inner { position: relative; z-index: 2; width: min(1440px,calc(100% - (var(--gutter) * 2))); margin: 0 auto; padding: var(--section) 0; }
@@ -882,3 +883,41 @@ button { -webkit-tap-highlight-color: transparent; }
   .ledger-row { grid-template-columns: 34px 1fr; }
   .ledger-row code { grid-column: 2; justify-self: start; }
 }
+
+/* Free-floating Cerebra brain: a single, continuous intelligence object. */
+.court-core--brain { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: none; }
+.court-core--brain:hover { transform: none; box-shadow: none; }
+.court-core--brain .brain-stage { min-height: 570px; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.court-core--brain:hover .brain-slice--left,.court-core--brain:hover .brain-slice--center,.court-core--brain:hover .brain-slice--right { transform: none; filter: none; }
+
+
+/* Direct-surface labels and a complete front-to-back brain turn. */
+.court-core--brain .brain-label { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.court-core--brain .brain-label strong { text-shadow: 0 0 18px rgb(0 188 255 / 34%); }
+.court-core--brain .brain-assembly { transform-style: preserve-3d; animation: brain-turn 16s linear infinite; }
+@keyframes brain-turn {
+  0% { transform: translate(-50%,-47%) rotateX(-3deg) rotateY(0deg); }
+  25% { transform: translate(-50%,-47%) rotateX(2deg) rotateY(90deg); }
+  50% { transform: translate(-50%,-47%) rotateX(-2deg) rotateY(180deg); }
+  75% { transform: translate(-50%,-47%) rotateX(3deg) rotateY(270deg); }
+  100% { transform: translate(-50%,-47%) rotateX(-3deg) rotateY(360deg); }
+}
+
+
+/* Keep the judge labeling; remove only the decorative top outlines and motion. */
+.court-core--brain::before,.court-core--brain .brain-stage::before { display: none; }
+.court-core--brain .brain-assembly { animation: none; transform: translate(-50%,-47%) rotateX(-2deg) rotateY(0deg); }
+.court-core--brain .brain-label { padding: 8px 10px; border: 1px solid rgb(168 227 255 / 15%); background: rgb(4 13 22 / 80%); box-shadow: 0 9px 25px rgb(0 0 0 / 22%); }
+
+
+/* Focus the Cerebra brain on hover without moving its labels. */
+.court-core--brain .brain-assembly { transition: transform .62s cubic-bezier(.16,1,.3,1),filter .62s; }
+.court-core--brain:hover .brain-assembly { transform: translate(-50%,-47%) rotateX(-2deg) rotateY(0deg) scale(1.13); filter: drop-shadow(0 36px 34px rgb(0 168 255 / 26%)); }
+
+
+/* Balanced court metrics: contained width, calmer figures, and even card rhythm. */
+.manifesto-metrics { width: min(100%,1280px); margin-right: auto; margin-left: auto; }
+.manifesto-metrics > div,.manifesto-metrics > div:not(:first-child) { min-height: 184px; padding: 24px clamp(22px,2.5vw,38px) 20px; }
+.manifesto-metrics strong { margin: auto 0 10px; font-size: clamp(48px,4.5vw,68px); line-height: .86; }
+.manifesto-metrics span { max-width: 260px; line-height: 1.45; }
+

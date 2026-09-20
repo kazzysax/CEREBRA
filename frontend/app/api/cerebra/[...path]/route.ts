@@ -1,4 +1,4 @@
-const backendUrl = process.env.CEREBRA_API_URL ?? 'http://127.0.0.1:3100';
+const backendUrl = process.env.CEREBRA_API_URL ?? 'https://cerebra-production-7d2e.up.railway.app';
 const agentApiKey = process.env.CEREBRA_AGENT_API_KEY;
 type RouteContext = { params: Promise<{ path: string[] }> };
 async function proxy(request: Request, context: RouteContext) {
@@ -10,8 +10,10 @@ async function proxy(request: Request, context: RouteContext) {
     const headers: Record<string, string> = {
       'content-type': request.headers.get('content-type') ?? 'application/json',
     };
+    const browserAgentKey = request.headers.get('x-cerebra-agent-key');
     const incomingAuthorization = request.headers.get('authorization');
     if (incomingAuthorization) headers.authorization = incomingAuthorization;
+    else if (browserAgentKey) headers.authorization = 'Bearer ' + browserAgentKey;
     else if (agentApiKey) headers.authorization = 'Bearer ' + agentApiKey;
     const registrationToken = request.headers.get('x-cerebra-registration-token');
     if (registrationToken) headers['x-cerebra-registration-token'] = registrationToken;
