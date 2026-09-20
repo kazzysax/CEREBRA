@@ -33,6 +33,10 @@ const citedClaimSchema = z.object({
 
 export const analystCaseSchema = z.object({
   recommendation: z.enum(["APPROVE", "REJECT"]),
+  marketBias: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+  entryWindow: z.string().trim().min(1).max(240),
+  entryConditions: z.array(z.string().trim().min(1).max(500)).min(1).max(5),
+  invalidation: z.string().trim().min(1).max(1_000),
   confidence: z.number().min(0).max(1),
   thesis: z.string().trim().min(1).max(2_000),
   keyClaims: z.array(citedClaimSchema).min(1).max(10),

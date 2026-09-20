@@ -219,6 +219,7 @@ export async function runCourt(
       policyHash: digest(policy),
       violations: [],
     },
+    advisory: analystCall.output,
   });
   report.doctrine = {
     id: doctrine.id,

@@ -29,6 +29,10 @@ export function createMockCourtProvider(): CourtModelProvider {
       const evidenceIds = submission.evidence.map((item) => item.id);
       return result({
         recommendation: "APPROVE",
+        marketBias: "LONG",
+        entryWindow: "Within the proposal timeframe, only after confirming the evidence remains current.",
+        entryConditions: ["Re-check the evidence packet immediately before acting."],
+        invalidation: "Do not proceed if the cited evidence is stale or the stated risk controls cannot be observed.",
         confidence: 0.72,
         thesis: "The supplied evidence supports testing the proposal, subject to the stated risk controls.",
         keyClaims: [{

@@ -117,6 +117,29 @@ export function buildRulingReport(rawInput: BuildRulingInput): RulingReport {
   });
 
   const judges: RulingReport["judges"] = [opinions[0]!, opinions[1]!, opinions[2]!];
+  const isActionable = status === "SUPPORTED" && input.advisory?.recommendation === "APPROVE"
+    && input.advisory.marketBias !== "NEUTRAL";
+  const recommendation = isActionable
+    ? {
+      status: "ACTIONABLE" as const,
+      direction: input.advisory!.marketBias,
+      timing: input.advisory!.entryWindow,
+      rationale: input.advisory!.thesis,
+      conditions: input.advisory!.entryConditions,
+      invalidation: input.advisory!.invalidation,
+      disclaimer: "Advisory guidance only. Confirm conditions at execution time; Cerebra never places an order.",
+    }
+    : {
+      status: status === "OPPOSED" || status === "INVALID" ? "NO_TRADE" as const : "WAIT" as const,
+      direction: "NEUTRAL" as const,
+      timing: "Do not open a position from this ruling.",
+      rationale: status === "OPPOSED"
+        ? "The court did not support the proposed thesis."
+        : "The court does not have a reliable majority basis for a directional recommendation.",
+      conditions: ["Gather or refresh the missing evidence, then convene a new court."],
+      invalidation: "Any prior thesis is invalid until a new evidence-bound ruling is issued.",
+      disclaimer: "Advisory guidance only. Cerebra never places an order.",
+    };
   return {
     schemaVersion: "cerebra.ruling-report.v1",
     reportId: input.reportId,
@@ -132,5 +155,6 @@ export function buildRulingReport(rawInput: BuildRulingInput): RulingReport {
     evidence: input.evidence,
     policyGate: input.policyGate,
     integrity: { inputHash: input.inputHash, errors },
+    recommendation,
   };
 }

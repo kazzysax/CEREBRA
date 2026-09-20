@@ -116,6 +116,15 @@ export const rulingReportSchema = z.object({
     inputHash: z.string().min(1),
     errors: z.array(z.string()),
   }),
+  recommendation: z.object({
+    status: z.enum(["ACTIONABLE", "WAIT", "NO_TRADE"]),
+    direction: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+    timing: z.string().min(1),
+    rationale: z.string().min(1),
+    conditions: z.array(z.string().min(1)),
+    invalidation: z.string().min(1),
+    disclaimer: z.string().min(1),
+  }),
   doctrine: z.object({
     id: z.string().min(1),
     version: z.string().min(1),
@@ -146,5 +155,13 @@ export const buildRulingInputSchema = z.object({
     policyHash: z.string().min(1),
     violations: z.array(z.string()),
   }),
+  advisory: z.object({
+    recommendation: z.enum(["APPROVE", "REJECT"]),
+    marketBias: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+    entryWindow: z.string().min(1),
+    entryConditions: z.array(z.string().min(1)).min(1),
+    invalidation: z.string().min(1),
+    thesis: z.string().min(1),
+  }).optional(),
 });
 export type BuildRulingInput = z.infer<typeof buildRulingInputSchema>;
