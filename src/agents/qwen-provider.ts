@@ -39,7 +39,16 @@ function normalizeKnownEvidenceId(id: string, knownIds: ReadonlySet<string>): st
   // this presentational prefix. Accept only that cosmetic form when the remaining
   // value is an exact evidence ID; every other unknown citation remains invalid.
   const withoutPresentationPrefix = id.replace(/^evidence\s*:\s*/i, "");
-  return knownIds.has(withoutPresentationPrefix) ? withoutPresentationPrefix : id;
+  if (knownIds.has(withoutPresentationPrefix)) return withoutPresentationPrefix;
+
+  // Qwen occasionally repeats a path segment while copying an evidence ID,
+  // e.g. `bitget:candles:BTCUSDT:BTCUSDT:<timestamp>`. Collapse only
+  // immediately repeated segments, then accept it only if it is exact.
+  const withoutAdjacentDuplicate = withoutPresentationPrefix
+    .split(":")
+    .filter((segment, index, segments) => index === 0 || segment !== segments[index - 1])
+    .join(":");
+  return knownIds.has(withoutAdjacentDuplicate) ? withoutAdjacentDuplicate : id;
 }
 
 function formatEvidence(context: AnalystContext["submission"]) {
