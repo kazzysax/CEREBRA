@@ -117,9 +117,10 @@ export function buildRulingReport(rawInput: BuildRulingInput): RulingReport {
   });
 
   const judges: RulingReport["judges"] = [opinions[0]!, opinions[1]!, opinions[2]!];
-  const isActionable = status === "SUPPORTED" && input.advisory?.recommendation === "APPROVE"
+  const supportsSubmittedRoute = status === "SUPPORTED" && input.advisory?.recommendation === "APPROVE"
     && input.advisory.marketBias !== "NEUTRAL";
-  const recommendation = isActionable
+  const supportsAlternativeRoute = status === "OPPOSED" && input.advisory?.alternativeRoute.direction !== "NEUTRAL";
+  const recommendation = supportsSubmittedRoute
     ? {
       status: "ACTIONABLE" as const,
       direction: input.advisory!.marketBias,
@@ -128,6 +129,16 @@ export function buildRulingReport(rawInput: BuildRulingInput): RulingReport {
       conditions: input.advisory!.entryConditions,
       invalidation: input.advisory!.invalidation,
       disclaimer: "Advisory guidance only. Confirm conditions at execution time; Cerebra never places an order.",
+    }
+    : supportsAlternativeRoute
+    ? {
+      status: "ACTIONABLE" as const,
+      direction: input.advisory!.alternativeRoute.direction,
+      timing: input.advisory!.alternativeRoute.timing,
+      rationale: input.advisory!.alternativeRoute.rationale,
+      conditions: input.advisory!.alternativeRoute.conditions,
+      invalidation: input.advisory!.alternativeRoute.invalidation,
+      disclaimer: "This is the evidence-bound alternative to the rejected thesis, not an automated order. Confirm conditions at execution time.",
     }
     : {
       status: status === "OPPOSED" || status === "INVALID" ? "NO_TRADE" as const : "WAIT" as const,

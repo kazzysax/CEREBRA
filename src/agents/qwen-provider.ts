@@ -115,7 +115,8 @@ export function createQwenCourtProvider(options: QwenProviderOptions): CourtMode
       return generateStructured(
         analystCaseSchema,
         "cerebra_analyst_case",
-        "Act as the Analyst. Build the strongest evidence-cited case for or against the proposal.",
+        "Act as the Analyst. Build the strongest evidence-cited case for or against the proposal. " +
+          "Always supply an alternativeRoute: if the submitted thesis is rejected, state the evidence-supported opposite route (LONG or SHORT) with a concrete timing window, conditions, and invalidation; otherwise use NEUTRAL.",
         {
           proposal: context.submission.proposal,
           riskLevel: context.submission.riskLevel,

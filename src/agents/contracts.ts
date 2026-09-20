@@ -30,6 +30,13 @@ const citedClaimSchema = z.object({
   claim: z.string().trim().min(1).max(1_000),
   evidenceIds: z.array(z.string().trim().min(1)).min(1).max(10),
 });
+const advisoryRouteSchema = z.object({
+  direction: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+  timing: z.string().trim().min(1).max(240),
+  rationale: z.string().trim().min(1).max(2_000),
+  conditions: z.array(z.string().trim().min(1).max(500)).min(1).max(5),
+  invalidation: z.string().trim().min(1).max(1_000),
+});
 
 export const analystCaseSchema = z.object({
   recommendation: z.enum(["APPROVE", "REJECT"]),
@@ -37,6 +44,7 @@ export const analystCaseSchema = z.object({
   entryWindow: z.string().trim().min(1).max(240),
   entryConditions: z.array(z.string().trim().min(1).max(500)).min(1).max(5),
   invalidation: z.string().trim().min(1).max(1_000),
+  alternativeRoute: advisoryRouteSchema,
   confidence: z.number().min(0).max(1),
   thesis: z.string().trim().min(1).max(2_000),
   keyClaims: z.array(citedClaimSchema).min(1).max(10),

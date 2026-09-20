@@ -162,6 +162,13 @@ export const buildRulingInputSchema = z.object({
     entryConditions: z.array(z.string().min(1)).min(1),
     invalidation: z.string().min(1),
     thesis: z.string().min(1),
+    alternativeRoute: z.object({
+      direction: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+      timing: z.string().min(1),
+      rationale: z.string().min(1),
+      conditions: z.array(z.string().min(1)).min(1),
+      invalidation: z.string().min(1),
+    }),
   }).optional(),
 });
 export type BuildRulingInput = z.infer<typeof buildRulingInputSchema>;

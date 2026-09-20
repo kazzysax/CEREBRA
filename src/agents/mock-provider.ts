@@ -33,6 +33,7 @@ export function createMockCourtProvider(): CourtModelProvider {
         entryWindow: "Within the proposal timeframe, only after confirming the evidence remains current.",
         entryConditions: ["Re-check the evidence packet immediately before acting."],
         invalidation: "Do not proceed if the cited evidence is stale or the stated risk controls cannot be observed.",
+        alternativeRoute: { direction: "NEUTRAL", timing: "Wait for a new evidence packet.", rationale: "No opposite-direction route is supported in synthetic mode.", conditions: ["Collect current market evidence."], invalidation: "Do not act on the alternative route without a new ruling." },
         confidence: 0.72,
         thesis: "The supplied evidence supports testing the proposal, subject to the stated risk controls.",
         keyClaims: [{
