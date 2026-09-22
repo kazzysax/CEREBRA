@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Geist, Geist_Mono, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 
 const geistSans = Geist({
@@ -12,13 +12,18 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
+const brandFont = Space_Grotesk({
+  variable: '--font-brand',
+  subsets: ['latin'],
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://cerebra-decision-court.web3kingley.chatgpt.site'),
   title: 'Cerebra — The decision court for stock intelligence',
   description: 'Stress-test tokenized U.S. stock and digital-asset theses with Bitget market intelligence, an Analyst, a Challenger, and three independent judges.',
   openGraph: {
     title: 'Cerebra — Put every trade idea on trial',
-    description: 'An AI Trading Desk for evidence-bound stock research, adversarial challenge, independent judgment, and visible dissent.',
+    description: 'An AI Trading Desk for evidence-bound research, adversarial judgment, outcome monitoring, dissent-aware calibration, and alternative recommendations.',
     images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Cerebra stock decision court' }],
   },
   twitter: {
@@ -36,7 +41,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${brandFont.variable} antialiased`}>
         {children}
       </body>
     </html>

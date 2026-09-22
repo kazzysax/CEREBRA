@@ -41,7 +41,10 @@ const endpoints = [
   ['POST', '/v1/cases/:id/jobs', 'Queue a durable, retryable court proceeding with an idempotency key.'],
   ['GET', '/v1/jobs/:id', 'Read job stage, attempts, failure state and the completed run ID.'],
   ['GET', '/v1/runs/:id', 'Read execution state, provider, timing and the complete result.'],
+  ['GET', '/v1/runs', 'List only the completed and in-progress court runs owned by the authenticated agent.'],
   ['GET', '/v1/runs/:id/report', 'Retrieve the portable ruling, Markdown report and dissent.'],
+  ['POST', '/v1/runs/:id/outcomes', 'Record a later observed outcome for post-ruling review.'],
+  ['GET', '/v1/judges/calibration', 'Read each judge\'s self-calibrated, loop-learned accuracy from recorded outcomes.'],
   ['POST', '/v1/memory/strategies', 'Create an immutable, owner-scoped strategy version.'],
   ['GET', '/v1/memory/recall', 'Recall timestamped impressions with expiration labels.'],
   ['POST', '/v1/memory/checkpoints', 'Store safe recovery state without replaying external actions.'],
@@ -77,7 +80,7 @@ export function AgentDocs() {
           <section className="docs-hero" id="overview">
             <div className="technical-kicker"><span>DECISION KIT / AGENT ACCESS</span><i /></div>
             <h1>Connect an agent<br />to the court.</h1>
-            <p>Cerebra accepts a trade thesis, seals market evidence, runs an adversarial five-agent proceeding, and returns a structured ruling without placing an order.</p>
+            <p>Cerebra accepts a trade thesis, seals market evidence, runs an adversarial five-agent proceeding, and returns a structured ruling with a safer alternative route when the original thesis is not supported.</p>
             <div className="docs-status-grid">
               <div><span>PRIMARY INTERFACE</span><strong>HTTP JSON API</strong></div>
               <div><span>ALTERNATIVE</span><strong>MCP + WEBMCP</strong></div>
@@ -97,7 +100,7 @@ export function AgentDocs() {
               <article><span>01</span><h3>Register</h3><p>Create an agent identity. Store the returned secret immediately—it is shown only once.</p></article>
               <article><span>02</span><h3>Create case</h3><p>Submit a symbol, market, horizon, risk posture and evidence mode.</p></article>
               <article><span>03</span><h3>Run court</h3><p>Trigger Bitget evidence, Analyst, Challenger and three isolated judges.</p></article>
-              <article><span>04</span><h3>Read report</h3><p>Use the run ID to retrieve every claim, objection, ballot and dissent.</p></article>
+              <article><span>04</span><h3>Review outcome</h3><p>Reopen the ruling, record what happened after execution, and let loop learning carry that self-calibrated context into the next review.</p></article>
             </div>
           </section>
 
@@ -134,7 +137,7 @@ export function AgentDocs() {
             <div className="docs-contract-grid">
               <article><span>ANALYST CASE</span><p>Recommendation, confidence, thesis, cited claims and explicit risks.</p></article>
               <article><span>CHALLENGE</span><p>Conclusion, severity-ranked objections and missing evidence.</p></article>
-              <article><span>RULING REPORT</span><p>Verdict, tally, three judge opinions, reason codes and dissent IDs.</p></article>
+              <article><span>RULING REPORT</span><p>Verdict, tally, three judge opinions, dissent IDs, plus an evidence-bound advisory or alternative route.</p></article>
               <article><span>TRACE</span><p>Every model stage, provider, status, usage and captured error.</p></article>
             </div>
           </section>

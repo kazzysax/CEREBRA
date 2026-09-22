@@ -1,8 +1,8 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { BrainCircuit, Check, CircleAlert, Fingerprint, LoaderCircle, Radio, ShieldCheck, Sparkles, Swords } from 'lucide-react';
-import type { JudgeOpinion, RunPhase } from '@/lib/cerebra';
+import { ArrowDown, BrainCircuit, Check, CircleAlert, FileCheck, Fingerprint, Gavel, LoaderCircle, Radio, ShieldCheck, Swords } from 'lucide-react';
+import type { CourtRunResult, JudgeOpinion, RunPhase } from '@/lib/cerebra';
 
 export function BrandMark() {
   return <span className="brand-mark" aria-hidden="true"><img src="/cerebra-mark.png" alt="" /></span>;
@@ -35,21 +35,51 @@ export function JudgeCard({ opinion }: { opinion: JudgeOpinion }) {
   );
 }
 
-export function Pipeline({ phase }: { phase: RunPhase }) {
-  const activeIndex = phase === 'COLLECTING' ? 0 : phase === 'ANALYSING' ? 3 : phase === 'COMPLETE' ? 5 : -1;
-  const stages = [
-    ['Bitget', Radio], ['Analyst', Sparkles], ['Challenge', Swords],
-    ['Risk', ShieldCheck], ['Evidence', Fingerprint], ['Strategy', BrainCircuit],
-  ] as const;
+export type CourtSubStage = 'EVIDENCE' | 'CHALLENGER' | 'JUDGES';
+
+const courtProgressSteps = [
+  { key: 'evidence' as const, label: 'Analyst gathering intel', Icon: Radio },
+  { key: 'challenger' as const, label: 'Challenger is questioning', Icon: Swords },
+  { key: 'judges' as const, label: 'Case in court', Icon: Gavel },
+  { key: 'report' as const, label: 'Report ready', Icon: FileCheck },
+];
+
+export function CourtProgress({
+  phase,
+  subStage,
+  result,
+}: {
+  phase: RunPhase;
+  subStage: CourtSubStage;
+  result: CourtRunResult | null;
+}) {
+  const activeIndex = phase === 'COMPLETE'
+    ? 3
+    : subStage === 'EVIDENCE' ? 0 : subStage === 'CHALLENGER' ? 1 : 2;
+  const tally = result?.report.tally;
+  const dissentCount = result?.report.dissentingJudgeIds.length ?? 0;
+
+  const descriptions: Record<(typeof courtProgressSteps)[number]['key'], string> = {
+    evidence: 'Live Bitget market data is sealed and handed to the Analyst.',
+    challenger: 'Stress-testing the thesis for weak assumptions and stale evidence.',
+    judges: tally
+      ? `${tally.approve} approve / ${tally.reject} reject${dissentCount ? ` — ${dissentCount} dissent recorded` : ' — unanimous decision'}`
+      : 'Risk, Evidence and Strategy judges review the case independently.',
+    report: phase === 'COMPLETE' ? 'Your Decision Kit is ready to read and download below.' : 'Compiling the ruling, ballots and full trace.',
+  };
+
   return (
-    <div className="pipeline" aria-label="Court pipeline">
-      {stages.map(([label, Icon], index) => {
-        const complete = phase === 'COMPLETE' || index < activeIndex;
-        const active = index === activeIndex;
+    <div className="court-progress" aria-label="Court proceeding progress">
+      {courtProgressSteps.map((step, index) => {
+        const isComplete = phase === 'COMPLETE' || index < activeIndex;
+        const isActive = index === activeIndex && phase !== 'COMPLETE';
         return (
-          <div className={`pipeline-step ${complete ? 'is-complete' : ''} ${active ? 'is-active' : ''}`} key={label}>
-            <span>{active ? <LoaderCircle className="animate-spin" /> : complete ? <Check /> : <Icon />}</span>
-            <small>{label}</small>
+          <div className="court-progress__row" key={step.key}>
+            <div className={`court-progress__step ${isComplete ? 'is-complete' : ''} ${isActive ? 'is-active' : ''}`}>
+              <span className="court-progress__icon">{isActive ? <LoaderCircle className="animate-spin" /> : isComplete ? <Check /> : <step.Icon />}</span>
+              <div className="court-progress__copy"><strong>{step.label}</strong><p>{descriptions[step.key]}</p></div>
+            </div>
+            {index < courtProgressSteps.length - 1 ? <div className="court-progress__arrow" aria-hidden="true"><ArrowDown /></div> : null}
           </div>
         );
       })}
