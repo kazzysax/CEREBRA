@@ -23,7 +23,7 @@ function majorityVote(approve: number, reject: number): Vote | null {
 
 export function buildRulingReport(rawInput: BuildRulingInput): RulingReport {
   const input = buildRulingInputSchema.parse(rawInput);
-  const errors: string[] = [];
+  const errors: string[] = [...(input.priorErrors ?? [])];
   const knownEvidence = new Set(input.evidence.map((item) => item.id));
   const responseByJudge = new Map<JudgeId, (typeof input.responses)[number]>();
 

@@ -150,6 +150,7 @@ export const buildRulingInputSchema = z.object({
   inputHash: z.string().min(1),
   evidence: z.array(evidenceReferenceSchema),
   responses: z.array(judgeResponseSchema),
+  priorErrors: z.array(z.string().min(1)).optional(),
   policyGate: z.object({
     passed: z.boolean(),
     policyHash: z.string().min(1),

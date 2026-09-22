@@ -107,3 +107,33 @@ test("returns an incomplete report when one model judge fails", async () => {
   assert.equal(result.report.judges[2].opinionType, "UNAVAILABLE");
   assert.equal(result.trace[4]?.status, "FAILED");
 });
+
+test("degrades gracefully instead of aborting when the Analyst cites unknown evidence", async () => {
+  const provider = createMockCourtProvider();
+  const hallucinatingProvider: CourtModelProvider = {
+    ...provider,
+    async runAnalyst(context) {
+      const call = await provider.runAnalyst(context);
+      return {
+        ...call,
+        output: {
+          ...call.output,
+          keyClaims: [{ claim: call.output.keyClaims[0]!.claim, evidenceIds: ["EVIDENCE:not-a-real-id"] }],
+        },
+      };
+    },
+  };
+
+  const result = await runCourt(submission, hallucinatingProvider, {
+    idFactory: () => "run-3",
+    now: () => new Date("2026-09-17T10:03:00.000Z"),
+  });
+
+  // The whole proceeding still completes—Challenger and all three judges run—
+  // rather than throwing and discarding every model call already spent.
+  assert.equal(result.trace.length, 5);
+  assert.equal(result.trace.every((entry) => entry.status === "SUCCEEDED"), true);
+  assert.equal(result.report.status, "INVALID");
+  assert.equal(result.report.verdict, null);
+  assert.match(result.report.integrity.errors[0] ?? "", /Analyst cited unknown evidence/);
+});

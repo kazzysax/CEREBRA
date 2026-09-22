@@ -32,7 +32,7 @@ const sharedSystem = [
   "Return concise conclusions, not hidden chain-of-thought.",
 ].join(" ");
 
-function normalizeKnownEvidenceId(id: string, knownIds: ReadonlySet<string>): string {
+export function normalizeKnownEvidenceId(id: string, knownIds: ReadonlySet<string>): string {
   if (knownIds.has(id)) return id;
 
   // Some OpenRouter/Qwen structured responses decorate an otherwise exact ID with
@@ -111,8 +111,8 @@ export function createQwenCourtProvider(options: QwenProviderOptions): CourtMode
     name: "qwen",
     model: options.model,
 
-    runAnalyst(context: AnalystContext): Promise<ModelCall<AnalystCase>> {
-      return generateStructured(
+    async runAnalyst(context: AnalystContext): Promise<ModelCall<AnalystCase>> {
+      const call = await generateStructured(
         analystCaseSchema,
         "cerebra_analyst_case",
         "Act as the Analyst. Build the strongest evidence-cited case for or against the proposal. " +
@@ -124,10 +124,21 @@ export function createQwenCourtProvider(options: QwenProviderOptions): CourtMode
           precedents: context.precedents,
         },
       );
+      const knownEvidenceIds = new Set(context.submission.evidence.map((item) => item.id));
+      return {
+        ...call,
+        output: {
+          ...call.output,
+          keyClaims: call.output.keyClaims.map((claim) => ({
+            ...claim,
+            evidenceIds: claim.evidenceIds.map((id) => normalizeKnownEvidenceId(id, knownEvidenceIds)),
+          })),
+        },
+      };
     },
 
-    runChallenger(context: ChallengerContext): Promise<ModelCall<Challenge>> {
-      return generateStructured(
+    async runChallenger(context: ChallengerContext): Promise<ModelCall<Challenge>> {
+      const call = await generateStructured(
         challengeSchema,
         "cerebra_challenge",
         "Act as the Challenger. Stress-test the Analyst case and expose unsupported assumptions.",
@@ -139,6 +150,17 @@ export function createQwenCourtProvider(options: QwenProviderOptions): CourtMode
           precedents: context.precedents,
         },
       );
+      const knownEvidenceIds = new Set(context.submission.evidence.map((item) => item.id));
+      return {
+        ...call,
+        output: {
+          ...call.output,
+          objections: call.output.objections.map((objection) => ({
+            ...objection,
+            evidenceIds: objection.evidenceIds.map((id) => normalizeKnownEvidenceId(id, knownEvidenceIds)),
+          })),
+        },
+      };
     },
 
     async runJudge(context: JudgeContext): Promise<ModelCall<JudgeDecision>> {

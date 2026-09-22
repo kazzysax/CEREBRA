@@ -105,16 +105,22 @@ function failureCode(error: unknown): "TIMEOUT" | "MODEL_ERROR" {
   return "MODEL_ERROR";
 }
 
-function assertKnownCitations(
+// A stage citing an unknown evidence ID is a real integrity problem, but not
+// one that should abort the whole proceeding: the judges already degrade the
+// same failure mode gracefully (report marked INVALID, verdict withheld)
+// rather than throwing. Collecting these instead of throwing keeps that
+// behavior consistent across every stage and avoids burning a full retry
+// (all downstream model calls) over what is usually a citation-formatting slip.
+function collectUnknownCitations(
   submission: CaseSubmission,
   stage: string,
   evidenceIds: readonly string[],
-) {
+): string[] {
   const knownIds = new Set(submission.evidence.map((item) => item.id));
   const unknownIds = evidenceIds.filter((id) => !knownIds.has(id));
-  if (unknownIds.length > 0) {
-    throw new Error(stage + " cited unknown evidence: " + unknownIds.join(", "));
-  }
+  return unknownIds.length > 0
+    ? [stage + " cited unknown evidence: " + unknownIds.join(", ")]
+    : [];
 }
 
 export async function runCourt(
@@ -133,14 +139,15 @@ export async function runCourt(
   const runId = idFactory();
   const startedAt = now().toISOString();
   const trace: CourtTraceEntry[] = [];
+  const priorErrors: string[] = [];
 
   const analystCall = await provider.runAnalyst({ submission, precedents });
   trace.push(successfulTrace("ANALYST", null, analystCall));
-  assertKnownCitations(
+  priorErrors.push(...collectUnknownCitations(
     submission,
     "Analyst",
     analystCall.output.keyClaims.flatMap((claim) => claim.evidenceIds),
-  );
+  ));
 
   const challengerCall = await provider.runChallenger({
     submission,
@@ -148,11 +155,11 @@ export async function runCourt(
     precedents,
   });
   trace.push(successfulTrace("CHALLENGER", null, challengerCall));
-  assertKnownCitations(
+  priorErrors.push(...collectUnknownCitations(
     submission,
     "Challenger",
     challengerCall.output.objections.flatMap((objection) => objection.evidenceIds),
-  );
+  ));
 
   const judgeSettlements = await Promise.allSettled(
     courtSeats.map(async (seat) => ({
@@ -237,6 +244,7 @@ export async function runCourt(
     inputHash: digest(submission),
     evidence: submission.evidence,
     responses: judgeResponses,
+    priorErrors,
     policyGate: {
       passed: true,
       policyHash: digest(policy),
