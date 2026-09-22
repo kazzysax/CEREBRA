@@ -19,9 +19,9 @@ function clientKey(request: FastifyRequest): string {
 }
 
 export function createAnonymousRateLimit(options: {
-  windowMs?: number;
-  maxRequests?: number;
-  now?: () => number;
+  windowMs?: number | undefined;
+  maxRequests?: number | undefined;
+  now?: (() => number) | undefined;
 } = {}) {
   const windowMs = options.windowMs ?? WINDOW_MS;
   const maxRequests = options.maxRequests ?? MAX_REQUESTS_PER_WINDOW;
