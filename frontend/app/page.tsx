@@ -262,24 +262,11 @@ export default function Home() {
               <span><i /> U.S. STOCKS · TOKENIZED MARKETS · HUMAN FINAL CALL</span>
             </div>
           </div>
-          <div className="court-core court-core--brain" aria-label="Interactive Cerebra court brain">
-            <div className="core-grid" aria-hidden="true" />
-            <div className="brain-stage">
-              <div className="brain-stage__head"><span>CEREBRA COURT / 03 JUDGES</span><strong>Intelligence under scrutiny</strong></div>
-              <div className="brain-assembly" aria-hidden="true">
-                <img className="brain-slice brain-slice--left" src="/cerebra-brain-hero.png" alt="" />
-                <img className="brain-slice brain-slice--center" src="/cerebra-brain-hero.png" alt="" />
-                <img className="brain-slice brain-slice--right" src="/cerebra-brain-hero.png" alt="" />
-              </div>
-              <div className="brain-labels" aria-label="Three independent judge lenses">
-                {['RISK', 'EVIDENCE', 'STRATEGY'].map((lens, index) => (
-                  <div className={`brain-label brain-label--${index + 1}`} key={lens}>
-                    <span>0{index + 1}</span><strong>{lens}</strong><small>{result ? result.report.judges[index]?.vote ?? 'UNAVAILABLE' : 'INDEPENDENT REVIEW'}</small>
-                  </div>
-                ))}
-              </div>
-              <div className="brain-stage__foot"><span>PERSISTENT INTELLIGENCE</span><i /><span>{result ? `${result.report.evidence.length} EVIDENCE SOURCES` : 'EVIDENCE SEALED PER CASE'}</span></div>
-            </div>
+          <div className="court-core court-core--brain" aria-label="Cerebra intelligence, rendered as a rotating brain">
+            <video className="brain-video" autoPlay loop muted playsInline aria-hidden="true">
+              <source src="/cerebra-brain.webm" type="video/webm" />
+              <source src="/cerebra-brain.mp4" type="video/mp4" />
+            </video>
           </div>
         </section>
       </div>
