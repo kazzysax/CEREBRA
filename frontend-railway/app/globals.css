@@ -29,7 +29,7 @@
   --section: clamp(100px,12vw,180px); --gutter: clamp(20px,4.3vw,66px);
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; background: var(--background); }
+html { scroll-behavior: smooth; background: var(--background); zoom: 0.85; }
 body { margin: 0; overflow-x: hidden; color: var(--foreground); background: var(--background); font-family: var(--font-geist-sans),Arial,sans-serif; }
 button,input,textarea,select { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
