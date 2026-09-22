@@ -10,6 +10,7 @@ import {
 } from "../domain/contracts.js";
 import type { CourtDoctrine } from "../court/doctrine.js";
 import type { CourtPrecedent } from "../court/precedent.js";
+import type { JudgeCalibration } from "../outcomes/contracts.js";
 
 export const proposalSchema = z.object({
   id: z.string().trim().min(1).optional(),
@@ -111,6 +112,8 @@ export type JudgeContext = {
   lens: JudgeLens;
   doctrine: CourtDoctrine;
   precedents: CourtPrecedent[];
+  // This judge's own accuracy on resolved post-trade outcomes, if enough history exists.
+  calibration: JudgeCalibration | null;
 };
 
 export interface CourtModelProvider {

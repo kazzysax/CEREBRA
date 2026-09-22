@@ -147,7 +147,8 @@ export function createQwenCourtProvider(options: QwenProviderOptions): CourtMode
         "cerebra_" + context.judgeId.replaceAll("-", "_"),
         "Act independently as " + context.judgeId + " using only the " +
           context.lens + " lens. Apply the supplied Court Doctrine and your seat mandate. " +
-          "Do not infer how other judges may vote.",
+          "Do not infer how other judges may vote. " +
+          "If calibration data is supplied, it reports your own accuracy on resolved post-trade outcomes from prior rulings; let it temper the confidence you report without changing your vote on this case's evidence.",
         {
           proposal: context.submission.proposal,
           riskLevel: context.submission.riskLevel,
@@ -155,6 +156,7 @@ export function createQwenCourtProvider(options: QwenProviderOptions): CourtMode
           analystCase: context.analystCase,
           challenge: context.challenge,
           precedents: context.precedents,
+          calibration: context.calibration,
           doctrine: {
             id: context.doctrine.id,
             version: context.doctrine.version,

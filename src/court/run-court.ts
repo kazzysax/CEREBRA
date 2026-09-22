@@ -15,6 +15,8 @@ import {
   type RulingReport,
 } from "../domain/contracts.js";
 import { buildRulingReport } from "../domain/ruling-engine.js";
+import type { JudgeCalibration } from "../outcomes/contracts.js";
+import { calibrateConfidence, type CalibrationAdjustment } from "./calibration.js";
 import { advisoryDoctrineV1, type CourtDoctrine } from "./doctrine.js";
 import type { CourtPrecedent } from "./precedent.js";
 
@@ -26,6 +28,7 @@ export type CourtTraceEntry = {
   model: string;
   usage: ModelUsage;
   error: string | null;
+  calibration: CalibrationAdjustment | null;
 };
 
 export type CourtRunResult = {
@@ -46,6 +49,7 @@ type RunCourtOptions = {
   idFactory?: (() => string) | undefined;
   doctrine?: CourtDoctrine | undefined;
   precedents?: CourtPrecedent[] | undefined;
+  calibration?: JudgeCalibration[] | undefined;
 };
 
 const emptyUsage: ModelUsage = {
@@ -75,6 +79,7 @@ function successfulTrace(
   stage: CourtTraceEntry["stage"],
   judgeId: JudgeId | null,
   call: ModelCall<unknown>,
+  calibration: CalibrationAdjustment | null = null,
 ): CourtTraceEntry {
   return {
     stage,
@@ -84,6 +89,7 @@ function successfulTrace(
     model: call.model,
     usage: call.usage,
     error: null,
+    calibration,
   };
 }
 
@@ -121,6 +127,9 @@ export async function runCourt(
   const idFactory = options.idFactory ?? randomUUID;
   const doctrine = options.doctrine ?? advisoryDoctrineV1;
   const precedents = options.precedents ?? [];
+  const calibrationByJudge = new Map(
+    (options.calibration ?? []).map((entry) => [entry.judgeId, entry] as const),
+  );
   const runId = idFactory();
   const startedAt = now().toISOString();
   const trace: CourtTraceEntry[] = [];
@@ -156,6 +165,7 @@ export async function runCourt(
         lens: seat.lens,
         doctrine,
         precedents,
+        calibration: calibrationByJudge.get(seat.judgeId) ?? null,
       }),
     })),
   );
@@ -164,13 +174,25 @@ export async function runCourt(
     const seat = courtSeats[index]!;
     if (settlement.status === "fulfilled") {
       const { call } = settlement.value;
-      trace.push(successfulTrace("JUDGE", seat.judgeId, call));
+      const adjustment = calibrateConfidence(
+        call.output.confidence,
+        calibrationByJudge.get(seat.judgeId),
+      );
+      trace.push(successfulTrace("JUDGE", seat.judgeId, call, adjustment));
+      const rationale = adjustment
+        ? call.output.rationale.slice(0, 1800) +
+          " [Confidence calibrated from " + adjustment.rawConfidence +
+          " to " + adjustment.calibratedConfidence + " using " + adjustment.resolved +
+          " resolved outcomes; historical accuracy " + Math.round(adjustment.accuracy * 100) + "%.]"
+        : call.output.rationale;
       return {
         ok: true,
         ballot: {
           judgeId: seat.judgeId,
           lens: seat.lens,
           ...call.output,
+          confidence: adjustment ? adjustment.calibratedConfidence : call.output.confidence,
+          rationale,
         },
       };
     }
@@ -184,6 +206,7 @@ export async function runCourt(
       model: provider.model,
       usage: emptyUsage,
       error: message,
+      calibration: null,
     });
     return {
       ok: false,

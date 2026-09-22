@@ -47,6 +47,9 @@ export async function executeCase(options: {
         limit: 5,
       })
       : [];
+    const calibration = options.agentId
+      ? await options.repository.getJudgeCalibration(options.agentId)
+      : [];
     const startedAt = now().toISOString();
     await options.repository.setCaseStatus(record.id, "RUNNING", startedAt);
     await options.repository.createRun({
@@ -59,6 +62,7 @@ export async function executeCase(options: {
     const result = await runCourt(record.submission, options.courtProvider, {
       idFactory: () => runId,
       precedents,
+      calibration,
     });
     await options.onStage?.("PERSISTING");
     await options.repository.completeRun(runId, result, renderRulingMarkdown(result.report));

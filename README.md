@@ -15,6 +15,7 @@ Agent guide: https://cerebra-decision-court.web3kingley.chatgpt.site/docs/agents
 - Agent registration, bearer-key authentication, rotation, revocation, and tenant isolation
 - Immutable strategy versions, timestamped impressions, memory recall, and recovery checkpoints
 - Durable court jobs with idempotency keys, leases, fencing generations, retries, progress, and cancellation
+- Post-trade outcome recording with a judge calibration feedback loop: an agent reports what actually happened after a ruling, and each judge's own resolved accuracy then tempers (or reinforces) its stated confidence on every future ruling for that agent
 - REST API plus full Streamable HTTP MCP tools
 - Stock-first responsive frontend, case history, full report view, and Markdown export
 - Deterministic mock mode for free local development and judging demos
@@ -82,6 +83,9 @@ Identity endpoints:
 - `POST /v1/jobs/:id/cancel` — cancel a queued job
 - `GET /v1/runs/:id` — retrieve run state and trace
 - `GET /v1/runs/:id/report` — retrieve the full Decision Kit and Markdown report
+- `POST /v1/runs/:id/outcomes` — record a later observed outcome for post-ruling review; feeds the judge calibration feedback loop
+- `GET /v1/runs/:id/outcomes` — list recorded outcomes for a run
+- `GET /v1/judges/calibration` — each judge's accuracy from recorded outcomes (resolved, correct, incorrect, accuracy)
 - `POST /v1/memory/strategies` — save an immutable strategy version
 - `GET /v1/memory/strategies` — list strategy lineage
 - `POST /v1/memory/impressions` — store a timestamped market belief
