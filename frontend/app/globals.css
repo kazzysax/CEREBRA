@@ -221,7 +221,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .machine-index,.machine-submit { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; }
 .machine-index { margin-bottom: 32px; padding-bottom: 17px; border-bottom: 1px solid var(--line); color: #718497; font: 550 8px/1 var(--font-geist-mono); letter-spacing: .13em; }
 .machine-index strong { color: var(--ice); font-weight: 560; }
-.machine-fields { position: relative; z-index: 1; display: grid; grid-template-columns: 1.1fr repeat(3,1fr); gap: 12px; }
+.machine-fields { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
 .field { display: flex; min-width: 0; flex-direction: column; gap: 9px; }
 .field > span { color: #718497; font: 560 8px/1 var(--font-geist-mono); letter-spacing: .11em; text-transform: uppercase; }
 .field [data-slot='input'],.field [data-slot='native-select'],.field [data-slot='textarea'] { min-height: 48px; border-color: var(--line); border-radius: 9px; color: var(--white); background: rgb(3 7 13 / 78%); box-shadow: inset 0 1px rgb(255 255 255 / 2%); }

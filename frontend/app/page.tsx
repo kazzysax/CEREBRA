@@ -15,37 +15,34 @@ import { cerebraApi, getSessionAgentKey, shortDate, type CaseRecord, type CourtJ
 const agentGuideSnippets = {
   http: 'POST ${CEREBRA_API_URL}/v1/cases\nAuthorization: Bearer <agent-api-key>\n{\n  "proposal": {\n    "asset": "TSLAUSDT",\n    "market": "usdt-futures",\n    "timeframe": "4h",\n    "summary": "Evaluate a provisional TSLA long thesis."\n  },\n  "riskLevel": "MEDIUM",\n  "evidenceMode": "BITGET"\n}\n\nPOST /v1/cases/{caseId}/jobs\nGET  /v1/jobs/{jobId}\nGET  /v1/runs/{runId}/report',
   mcp: '{\n  "mcpServers": {\n    "cerebra": {\n      "url": "${CEREBRA_API_URL}/mcp",\n      "headers": { "Authorization": "Bearer <agent-api-key>" }\n    }\n  }\n}\n\nWorkflow tools:\n- cerebra_create_case\n- cerebra_enqueue_court\n- cerebra_get_job\n- cerebra_get_report\n- cerebra_save_strategy\n- cerebra_recall_memory\n- cerebra_save_checkpoint',
-  browser: 'Tool: create_cerebra_case_and_run_court\n\nInput:\n  asset · market · timeframe\n  riskLevel · summary\n\nReturns:\n  runId · verdict · status\n  dissentingJudgeIds',
+  browser: 'Tool: create_cerebra_case_and_run_court\n\nInput:\n  asset (U.S. stock) · timeframe\n  riskLevel · summary\n\nReturns:\n  runId · verdict · status\n  dissentingJudgeIds',
 } as const;
 
 type CourtInput = {
   asset: string;
-  market: string;
   timeframe: string;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   summary: string;
 };
 
-const assetsByMarket = {
-  spot: [
-    { value: 'BTCUSDT', label: 'Bitcoin (BTC / USDT)' },
-    { value: 'ETHUSDT', label: 'Ethereum (ETH / USDT)' },
-    { value: 'SOLUSDT', label: 'Solana (SOL / USDT)' },
-    { value: 'XRPUSDT', label: 'XRP (XRP / USDT)' },
-    { value: 'BNBUSDT', label: 'BNB (BNB / USDT)' },
-    { value: 'DOGEUSDT', label: 'Dogecoin (DOGE / USDT)' },
-  ],
-  'usdt-futures': [
-    { value: 'TSLAUSDT', label: 'Tesla (TSLA)' },
-    { value: 'AAPLUSDT', label: 'Apple (AAPL)' },
-    { value: 'NVDAUSDT', label: 'Nvidia (NVDA)' },
-    { value: 'MSFTUSDT', label: 'Microsoft (MSFT)' },
-    { value: 'COINUSDT', label: 'Coinbase (COIN)' },
-    { value: 'METAUSDT', label: 'Meta (META)' },
-  ],
-} as const satisfies Record<string, ReadonlyArray<{ value: string; label: string }>>;
+// Cerebra is a U.S. stock desk: every symbol here is a tokenized U.S. equity on
+// Bitget's usdt-futures market—there is no crypto-pair option.
+const stockPairs = [
+  { value: 'TSLAUSDT', label: 'Tesla (TSLA)' },
+  { value: 'AAPLUSDT', label: 'Apple (AAPL)' },
+  { value: 'NVDAUSDT', label: 'Nvidia (NVDA)' },
+  { value: 'MSFTUSDT', label: 'Microsoft (MSFT)' },
+  { value: 'AMZNUSDT', label: 'Amazon (AMZN)' },
+  { value: 'GOOGLUSDT', label: 'Alphabet (GOOGL)' },
+  { value: 'METAUSDT', label: 'Meta (META)' },
+  { value: 'NFLXUSDT', label: 'Netflix (NFLX)' },
+  { value: 'AMDUSDT', label: 'AMD (AMD)' },
+  { value: 'COINUSDT', label: 'Coinbase (COIN)' },
+  { value: 'JPMUSDT', label: 'JPMorgan Chase (JPM)' },
+  { value: 'DISUSDT', label: 'Disney (DIS)' },
+] as const;
 
-type MarketKey = keyof typeof assetsByMarket;
+const STOCK_MARKET = 'usdt-futures' as const;
 
 type WebMcpContext = {
   registerTool: (tool: {
@@ -65,8 +62,8 @@ function statusTone(status: string) {
 }
 
 export default function Home() {
-  const [market, setMarket] = useState<MarketKey>('usdt-futures');
-  const [asset, setAsset] = useState<string>(assetsByMarket['usdt-futures'][0].value);
+  const market = STOCK_MARKET;
+  const [asset, setAsset] = useState<string>(stockPairs[0].value);
   const [timeframe, setTimeframe] = useState('4h');
   const [riskLevel, setRiskLevel] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
   const [summary, setSummary] = useState('');
@@ -129,17 +126,16 @@ export default function Home() {
     void Promise.resolve(context.registerTool({
       name: 'create_cerebra_case_and_run_court',
       title: 'Convene Cerebra court',
-      description: 'Create a stock or digital-asset thesis, gather Bitget market evidence, run the multi-agent court, and return its verdict and dissent.',
+      description: 'Create a U.S. stock thesis, gather Bitget market evidence, run the multi-agent court, and return its verdict and dissent.',
       inputSchema: {
         type: 'object',
         properties: {
-          asset: { type: 'string', description: 'Trading symbol such as BTCUSDT.' },
-          market: { type: 'string', enum: ['spot', 'usdt-futures'] },
+          asset: { type: 'string', description: 'Tokenized U.S. stock symbol such as TSLAUSDT.' },
           timeframe: { type: 'string', enum: ['15m', '1h', '4h', '1d'] },
           riskLevel: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
           summary: { type: 'string', minLength: 10, description: 'The decision thesis to put before the court.' },
         },
-        required: ['asset', 'market', 'timeframe', 'riskLevel', 'summary'],
+        required: ['asset', 'timeframe', 'riskLevel', 'summary'],
         additionalProperties: false,
       },
       annotations: { readOnlyHint: false, untrustedContentHint: true },
@@ -149,8 +145,8 @@ export default function Home() {
         if (typeof candidate.asset !== 'string' || typeof candidate.summary !== 'string' || candidate.summary.trim().length < 10) {
           throw new Error('asset and a summary of at least 10 characters are required.');
         }
-        if (!['spot', 'usdt-futures'].includes(String(candidate.market)) || !['15m', '1h', '4h', '1d'].includes(String(candidate.timeframe)) || !['LOW', 'MEDIUM', 'HIGH'].includes(String(candidate.riskLevel))) {
-          throw new Error('market, timeframe, or riskLevel is invalid.');
+        if (!['15m', '1h', '4h', '1d'].includes(String(candidate.timeframe)) || !['LOW', 'MEDIUM', 'HIGH'].includes(String(candidate.riskLevel))) {
+          throw new Error('timeframe or riskLevel is invalid.');
         }
         const run = await executeCourt(candidate as unknown as CourtInput);
         return { runId: run.runId, verdict: run.report.verdict, status: run.report.status, dissentingJudgeIds: run.report.dissentingJudgeIds };
@@ -161,7 +157,6 @@ export default function Home() {
 
   async function executeCourt(input: CourtInput) {
     setAsset(input.asset.toUpperCase());
-    setMarket(input.market as MarketKey);
     setTimeframe(input.timeframe);
     setRiskLevel(input.riskLevel);
     setSummary(input.summary);
@@ -171,7 +166,7 @@ export default function Home() {
       const created = await cerebraApi<CaseRecord>('/v1/cases', {
         method: 'POST',
         body: JSON.stringify({
-          proposal: { asset: input.asset.trim().toUpperCase(), market: input.market, timeframe: input.timeframe, summary: input.summary.trim() },
+          proposal: { asset: input.asset.trim().toUpperCase(), market: STOCK_MARKET, timeframe: input.timeframe, summary: input.summary.trim() },
           riskLevel: input.riskLevel,
           evidenceMode: 'BITGET',
         }),
@@ -226,7 +221,7 @@ export default function Home() {
     event.preventDefault();
     if (summary.trim().length < 10 || !asset.trim()) return;
     try {
-      await executeCourt({ asset, market, timeframe, riskLevel, summary });
+      await executeCourt({ asset, timeframe, riskLevel, summary });
     } catch {
       // executeCourt already records the failure via setError; nothing further to do here.
     }
@@ -264,7 +259,7 @@ export default function Home() {
             <p>Cerebra turns market facts into scrutinized direction from a full three-judge court, then closes the loop: persistent memory carries every ruling and dissent forward, and each judge's confidence self-calibrates against what actually happened next.</p>
             <div className="hero-actions">
               <button className="text-action" onClick={() => document.getElementById('case-input')?.scrollIntoView({ behavior: 'smooth' })}>Put intelligence under scrutiny <ArrowRight /></button>
-              <span><i /> U.S. STOCKS · DIGITAL ASSETS · HUMAN FINAL CALL</span>
+              <span><i /> U.S. STOCKS · TOKENIZED MARKETS · HUMAN FINAL CALL</span>
             </div>
           </div>
           <div className="court-core court-core--brain" aria-label="Interactive Cerebra court brain">
@@ -383,7 +378,7 @@ export default function Home() {
           <div className="feature-lattice">
             <article><span>01</span><div><small>MEMORY / DURABLE</small><h3>Persistent memory<br />across every session</h3><p>Cases, strategy versions, sealed evidence and ballots remain available to give the next review real context after the chat or agent restarts—nothing resets.</p></div><code>RECALL_READY</code></article>
             <article><span>02</span><div><small>ADVISORY / EVIDENCE-BOUND</small><h3>A better route when needed</h3><p>If the court rejects the original thesis, it can propose a supported alternative direction, timing, conditions and invalidation—never a guaranteed return or an automatic order.</p></div><code>ALTERNATIVE_ROUTE</code></article>
-            <article><span>03</span><div><small>INTELLIGENCE / ADVERSARIAL</small><h3>Analyst versus Challenger</h3><p>One agent assembles the argument; another searches for contradictions, stale evidence, hidden assumptions and failure scenarios.</p></div><code>CROSS_EXAM</code></article>
+            <article><span>03</span><div><small>LOOP / SELF-CORRECTING</small><h3>Every judge is graded<br />on what really happened</h3><p>Report the real outcome and each judge's accuracy on resolved rulings is tracked independently—a judge with a bad track record on risk gets quieter over time, without touching the other two lenses.</p></div><code>SELF_CORRECTING</code></article>
             <article><span>04</span><div><small>COURT / 3 ISOLATED BALLOTS</small><h3>Three independent judges</h3><p>No single agent gives the decision. Risk, evidence and strategy judges vote independently; the majority gives direction while the dissent preserves what it challenged.</p></div><code>2_OF_3</code></article>
             <article><span>05</span><div><small>LEARNING / SELF-CALIBRATED</small><h3>The record teaches<br />the next ruling</h3><p>Report what actually happened after execution and each judge's confidence self-calibrates against its own track record—a real loop-learning system, not a static scorecard.</p></div><code>LOOP_LEARNED</code></article>
             <article><span>06</span><div><small>SAFETY / HUMAN CONTROL</small><h3>Human final-decision gate</h3><p>Cerebra analyzes and stress-tests. It does not present an advisory ruling as guaranteed profit or silently place the trade.</p></div><code>NO_AUTO_ORDER</code></article>
@@ -393,7 +388,7 @@ export default function Home() {
             <div className="hackathon-fit__lead">
               <span>BITGET AI · GENESIS SEASON 2</span>
               <h3>Built for the<br />AI Trading Desk.</h3>
-              <p>Decision stress-testing for tokenized U.S. stocks and digital assets, grounded in Bitget market evidence.</p>
+              <p>Decision stress-testing for tokenized U.S. stocks, grounded in Bitget market evidence.</p>
             </div>
             <div className="hackathon-fit__spec">
               <div><span>TRACK</span><strong>AI Trading Desk</strong></div>
@@ -522,11 +517,10 @@ export default function Home() {
           <form className="case-machine" onSubmit={runCourt}>
             <div className="machine-index"><span>LIVE CASE TERMINAL</span><strong>NEW CASE</strong></div>
             <div className="machine-fields">
-              <label className="field" htmlFor="case-market"><span>01 / Bitget market</span><NativeSelect id="case-market" className="w-full" value={market} onChange={(event) => { const nextMarket = event.target.value as MarketKey; setMarket(nextMarket); setAsset(assetsByMarket[nextMarket][0].value); }}><NativeSelectOption value="spot">Crypto spot</NativeSelectOption><NativeSelectOption value="usdt-futures">Tokenized stock / USDT futures</NativeSelectOption></NativeSelect></label>
-              <label className="field" htmlFor="case-asset"><span>02 / Stock or asset pair</span><NativeSelect id="case-asset" className="w-full" value={asset} onChange={(event) => setAsset(event.target.value)}>{assetsByMarket[market].map((item) => <NativeSelectOption key={item.value} value={item.value}>{item.label}</NativeSelectOption>)}</NativeSelect></label>
-              <label className="field" htmlFor="case-timeframe"><span>03 / Horizon</span><NativeSelect id="case-timeframe" className="w-full" value={timeframe} onChange={(event) => setTimeframe(event.target.value)}><NativeSelectOption value="15m">15 minutes</NativeSelectOption><NativeSelectOption value="1h">1 hour</NativeSelectOption><NativeSelectOption value="4h">4 hours</NativeSelectOption><NativeSelectOption value="1d">1 day</NativeSelectOption></NativeSelect></label>
-              <label className="field" htmlFor="case-risk"><span>04 / Risk posture</span><NativeSelect id="case-risk" className="w-full" value={riskLevel} onChange={(event) => setRiskLevel(event.target.value as typeof riskLevel)}><NativeSelectOption value="LOW">Low</NativeSelectOption><NativeSelectOption value="MEDIUM">Medium</NativeSelectOption><NativeSelectOption value="HIGH">High</NativeSelectOption></NativeSelect></label>
-              <label className="field field-thesis" htmlFor="case-summary"><span>05 / Thesis to test</span><Textarea id="case-summary" value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="State the thesis, catalyst, and what you want the court to challenge." minLength={10} maxLength={4000} required /></label>
+              <label className="field" htmlFor="case-asset"><span>01 / U.S. stock</span><NativeSelect id="case-asset" className="w-full" value={asset} onChange={(event) => setAsset(event.target.value)}>{stockPairs.map((item) => <NativeSelectOption key={item.value} value={item.value}>{item.label}</NativeSelectOption>)}</NativeSelect></label>
+              <label className="field" htmlFor="case-timeframe"><span>02 / Horizon</span><NativeSelect id="case-timeframe" className="w-full" value={timeframe} onChange={(event) => setTimeframe(event.target.value)}><NativeSelectOption value="15m">15 minutes</NativeSelectOption><NativeSelectOption value="1h">1 hour</NativeSelectOption><NativeSelectOption value="4h">4 hours</NativeSelectOption><NativeSelectOption value="1d">1 day</NativeSelectOption></NativeSelect></label>
+              <label className="field" htmlFor="case-risk"><span>03 / Risk posture</span><NativeSelect id="case-risk" className="w-full" value={riskLevel} onChange={(event) => setRiskLevel(event.target.value as typeof riskLevel)}><NativeSelectOption value="LOW">Low</NativeSelectOption><NativeSelectOption value="MEDIUM">Medium</NativeSelectOption><NativeSelectOption value="HIGH">High</NativeSelectOption></NativeSelect></label>
+              <label className="field field-thesis" htmlFor="case-summary"><span>04 / Thesis to test</span><Textarea id="case-summary" value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="State the thesis, catalyst, and what you want the court to challenge." minLength={10} maxLength={4000} required /></label>
             </div>
             <div className="machine-submit">
               <div className="evidence-source"><Radio /><span><strong>Live court ready</strong><small>Bitget evidence · five-agent court · no order execution</small></span></div>

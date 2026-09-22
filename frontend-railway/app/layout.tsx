@@ -20,7 +20,7 @@ const brandFont = Space_Grotesk({
 export const metadata: Metadata = {
   metadataBase: new URL('https://cerebra-decision-court.web3kingley.chatgpt.site'),
   title: 'Cerebra — The decision court for stock intelligence',
-  description: 'Stress-test tokenized U.S. stock and digital-asset theses with Bitget market intelligence, an Analyst, a Challenger, and three independent judges.',
+  description: 'Stress-test tokenized U.S. stock theses with Bitget market intelligence, an Analyst, a Challenger, and three independent judges.',
   openGraph: {
     title: 'Cerebra — Put every trade idea on trial',
     description: 'An AI Trading Desk for evidence-bound research, adversarial judgment, outcome monitoring, dissent-aware calibration, and alternative recommendations.',
