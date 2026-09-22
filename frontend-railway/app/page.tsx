@@ -84,12 +84,22 @@ export default function Home() {
   useEffect(() => {
     if (phase !== 'ANALYSING') { setCourtSubStage('EVIDENCE'); return; }
     setCourtSubStage('EVIDENCE');
-    // The backend only reports coarse job stages; these estimated beats keep the
-    // narrative moving while a single Analyst→Challenger→Judges call is in flight.
-    const toChallenger = setTimeout(() => setCourtSubStage('CHALLENGER'), 3000);
-    const toJudges = setTimeout(() => setCourtSubStage('JUDGES'), 7000);
-    return () => { clearTimeout(toChallenger); clearTimeout(toJudges); };
+    // These estimated beats keep the narrative moving for an anonymous run (a single
+    // blocking call with no intermediate signal at all). A connected agent's job
+    // polling overrides this with the backend's real stage as soon as it arrives—see
+    // syncCourtSubStage below—so this is only ever a starting guess, never the source
+    // of truth once real data is available.
+    const toRecord = setTimeout(() => setCourtSubStage('RECORD'), 1500);
+    const toChallenger = setTimeout(() => setCourtSubStage('CHALLENGER'), 4000);
+    const toJudges = setTimeout(() => setCourtSubStage('JUDGES'), 8000);
+    return () => { clearTimeout(toRecord); clearTimeout(toChallenger); clearTimeout(toJudges); };
   }, [phase]);
+
+  const courtSubStageOrder: CourtSubStage[] = ['EVIDENCE', 'RECORD', 'CHALLENGER', 'JUDGES'];
+  function syncCourtSubStage(next: CourtSubStage) {
+    setCourtSubStage((current) =>
+      courtSubStageOrder.indexOf(next) > courtSubStageOrder.indexOf(current) ? next : current);
+  }
 
   async function copyAgentGuide(guide: keyof typeof agentGuideSnippets) {
     await navigator.clipboard.writeText(agentGuideSnippets[guide]);
@@ -180,6 +190,12 @@ export default function Home() {
         for (let attempt = 0; attempt < 180 && !['COMPLETED', 'FAILED', 'CANCELLED'].includes(current.status); attempt += 1) {
           await new Promise((resolve) => setTimeout(resolve, 1000));
           current = await cerebraApi<CourtJob>(`/v1/jobs/${job.id}`);
+          // The job's real backend stage—not a guess—so it only ever moves the
+          // narrative forward, correcting the timer if reality runs ahead of it.
+          if (current.stage === 'EVIDENCE') syncCourtSubStage('EVIDENCE');
+          else if (current.stage === 'RECORD') syncCourtSubStage('RECORD');
+          else if (current.stage === 'ANALYST') syncCourtSubStage('CHALLENGER');
+          else if (current.stage === 'PERSISTING') syncCourtSubStage('JUDGES');
         }
         if (current.status !== 'COMPLETED' || !current.runId) {
           throw new Error(current.error ?? `Court job ended with ${current.status}.`);
@@ -529,7 +545,7 @@ export default function Home() {
           </div>
           <div className="deliberation-module">
             <div className="module-grid" aria-hidden="true" />
-            <CourtProgress phase={phase === 'IDLE' ? 'COMPLETE' : phase} subStage={courtSubStage} result={result} />
+            <CourtProgress phase={phase === 'IDLE' ? 'COMPLETE' : phase} subStage={courtSubStage} hasAgent={connected} result={result} />
             <div className="verdict-grid">
               <div className={`verdict-card verdict-${verdict.toLowerCase().replace(' ', '-')}`}><div className="verdict-seal"><Scale /></div><div><p>Ruling of the court</p><h3>{verdict}</h3><span>{result.report.status} · {result.report.tally.approve} approve / {result.report.tally.reject} reject</span></div></div>
               <div className="decision-note"><span className="quote-mark">“</span><p>{result.report.proposal.summary}</p><div><Activity /> Completed in {Math.max(1, Math.round((new Date(result.completedAt).getTime() - new Date(result.startedAt).getTime()) / 1000))} seconds</div></div>
@@ -602,7 +618,7 @@ export default function Home() {
           </div>
           <div className="deliberation-module">
             <div className="module-grid" aria-hidden="true" />
-            <CourtProgress phase={phase} subStage={courtSubStage} result={null} />
+            <CourtProgress phase={phase} subStage={courtSubStage} hasAgent={connected} result={null} />
           </div>
         </section> : <section className="system-section empty-results-section" aria-live="polite">
           <div className="chapter-label"><span>02</span><i /><strong>COURT RECORD</strong></div>

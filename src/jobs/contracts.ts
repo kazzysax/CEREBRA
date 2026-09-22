@@ -1,5 +1,5 @@
 export type CourtJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
-export type CourtJobStage = "QUEUED" | "CLAIMED" | "EVIDENCE" | "ANALYST" | "PERSISTING" | "COMPLETED" | "RETRYING" | "FAILED" | "CANCELLED";
+export type CourtJobStage = "QUEUED" | "CLAIMED" | "EVIDENCE" | "RECORD" | "ANALYST" | "PERSISTING" | "COMPLETED" | "RETRYING" | "FAILED" | "CANCELLED";
 
 export type CourtJobRecord = {
   id: string;

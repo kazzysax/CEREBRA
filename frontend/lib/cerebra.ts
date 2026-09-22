@@ -31,7 +31,12 @@ export type CourtRunResult = {
     missingEvidence: string[];
   };
   report: RulingReport;
-  trace: Array<{ stage: 'ANALYST' | 'CHALLENGER' | 'JUDGE'; judgeId: string | null; status: 'SUCCEEDED' | 'FAILED'; provider: string; model: string; error: string | null }>;
+  trace: Array<{
+    stage: 'ANALYST' | 'CHALLENGER' | 'JUDGE'; judgeId: string | null; status: 'SUCCEEDED' | 'FAILED';
+    provider: string; model: string; error: string | null;
+    calibration: { resolved: number; accuracy: number; rawConfidence: number; calibratedConfidence: number } | null;
+  }>;
+  precedents: Array<{ caseId: string; runId: string; asset: string; verdict: 'APPROVE' | 'REJECT' | null; concludedAt: string }>;
 };
 export type CaseRecord = {
   id: string; evidenceMode: 'BITGET' | 'MANUAL';

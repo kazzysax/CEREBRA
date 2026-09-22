@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { ArrowDown, BrainCircuit, Check, CircleAlert, FileCheck, Fingerprint, Gavel, LoaderCircle, Radio, ShieldCheck, Swords } from 'lucide-react';
+import { ArrowDown, BrainCircuit, Check, CircleAlert, FileCheck, Fingerprint, Gavel, History, LoaderCircle, Radio, ShieldCheck, Swords } from 'lucide-react';
 import type { CourtRunResult, JudgeOpinion, RunPhase } from '@/lib/cerebra';
 
 export function BrandMark() {
@@ -35,10 +35,11 @@ export function JudgeCard({ opinion }: { opinion: JudgeOpinion }) {
   );
 }
 
-export type CourtSubStage = 'EVIDENCE' | 'CHALLENGER' | 'JUDGES';
+export type CourtSubStage = 'EVIDENCE' | 'RECORD' | 'CHALLENGER' | 'JUDGES';
 
 const courtProgressSteps = [
   { key: 'evidence' as const, label: 'Analyst gathering intel', Icon: Radio },
+  { key: 'record' as const, label: 'Checking your record', Icon: History },
   { key: 'challenger' as const, label: 'Challenger is questioning', Icon: Swords },
   { key: 'judges' as const, label: 'Case in court', Icon: Gavel },
   { key: 'report' as const, label: 'Report ready', Icon: FileCheck },
@@ -47,20 +48,35 @@ const courtProgressSteps = [
 export function CourtProgress({
   phase,
   subStage,
+  hasAgent,
   result,
 }: {
   phase: RunPhase;
   subStage: CourtSubStage;
+  hasAgent: boolean;
   result: CourtRunResult | null;
 }) {
   const activeIndex = phase === 'COMPLETE'
-    ? 3
-    : subStage === 'EVIDENCE' ? 0 : subStage === 'CHALLENGER' ? 1 : 2;
+    ? 4
+    : subStage === 'EVIDENCE' ? 0 : subStage === 'RECORD' ? 1 : subStage === 'CHALLENGER' ? 2 : 3;
   const tally = result?.report.tally;
   const dissentCount = result?.report.dissentingJudgeIds.length ?? 0;
+  const precedentCount = result?.precedents.length ?? 0;
+  const calibrationHit = result?.trace.find((entry) => entry.calibration)?.calibration ?? null;
+
+  const recordDescription = !hasAgent
+    ? 'No agent connected — nothing to check for an anonymous run.'
+    : !result
+      ? 'Reviewing this agent\'s prior rulings and each judge\'s resolved-outcome accuracy.'
+      : calibrationHit
+        ? `Found ${calibrationHit.resolved} resolved outcome${calibrationHit.resolved === 1 ? '' : 's'} (${Math.round(calibrationHit.accuracy * 100)}% accurate) — judge confidence calibrated against it.`
+        : precedentCount > 0
+          ? `${precedentCount} prior ruling${precedentCount === 1 ? '' : 's'} reviewed for context; not enough resolved outcomes yet to calibrate confidence.`
+          : 'No prior record yet for this agent — this is its first ruling.';
 
   const descriptions: Record<(typeof courtProgressSteps)[number]['key'], string> = {
     evidence: 'Live Bitget market data is sealed and handed to the Analyst.',
+    record: recordDescription,
     challenger: 'Stress-testing the thesis for weak assumptions and stale evidence.',
     judges: tally
       ? `${tally.approve} approve / ${tally.reject} reject${dissentCount ? ` — ${dissentCount} dissent recorded` : ' — unanimous decision'}`

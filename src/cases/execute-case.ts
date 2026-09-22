@@ -21,7 +21,7 @@ export async function executeCase(options: {
   courtProvider: CourtModelProvider;
   now?: (() => Date) | undefined;
   idFactory?: (() => string) | undefined;
-  onStage?: ((stage: "EVIDENCE" | "ANALYST" | "PERSISTING") => Promise<void>) | undefined;
+  onStage?: ((stage: "EVIDENCE" | "RECORD" | "ANALYST" | "PERSISTING") => Promise<void>) | undefined;
 }): Promise<CourtRunResult> {
   const now = options.now ?? (() => new Date());
   const idFactory = options.idFactory ?? randomUUID;
@@ -38,6 +38,10 @@ export async function executeCase(options: {
       if (!record) throw new Error("Case disappeared during evidence refresh");
     }
 
+    await options.onStage?.("RECORD");
+    // Precedent and calibration history is best-effort context, not something a
+    // transient read failure should be allowed to take the whole run down over:
+    // the court still runs correctly, just without that agent's prior record.
     const precedents = options.agentId
       ? await options.repository.findPrecedents({
         agentId: options.agentId,
@@ -45,10 +49,10 @@ export async function executeCase(options: {
         market: record.submission.proposal.market,
         excludeCaseId: record.id,
         limit: 5,
-      })
+      }).catch(() => [])
       : [];
     const calibration = options.agentId
-      ? await options.repository.getJudgeCalibration(options.agentId)
+      ? await options.repository.getJudgeCalibration(options.agentId).catch(() => [])
       : [];
     const startedAt = now().toISOString();
     await options.repository.setCaseStatus(record.id, "RUNNING", startedAt);

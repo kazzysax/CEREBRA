@@ -1,0 +1,3 @@
+ALTER TABLE court_jobs DROP CONSTRAINT IF EXISTS court_jobs_stage_check;
+ALTER TABLE court_jobs ADD CONSTRAINT court_jobs_stage_check
+  CHECK (stage IN ('QUEUED', 'CLAIMED', 'EVIDENCE', 'RECORD', 'ANALYST', 'PERSISTING', 'COMPLETED', 'RETRYING', 'FAILED', 'CANCELLED'));

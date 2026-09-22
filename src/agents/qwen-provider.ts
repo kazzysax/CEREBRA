@@ -36,9 +36,10 @@ export function normalizeKnownEvidenceId(id: string, knownIds: ReadonlySet<strin
   if (knownIds.has(id)) return id;
 
   // Some OpenRouter/Qwen structured responses decorate an otherwise exact ID with
-  // this presentational prefix. Accept only that cosmetic form when the remaining
+  // this presentational prefix—seen live as "EVIDENCE:", "Evidence ID:", and a
+  // colon-less "EVIDENCE ev-1". Accept only that cosmetic form when the remaining
   // value is an exact evidence ID; every other unknown citation remains invalid.
-  const withoutPresentationPrefix = id.replace(/^evidence\s*:\s*/i, "");
+  const withoutPresentationPrefix = id.replace(/^evidence(\s*id)?\s*:?\s*/i, "");
   if (knownIds.has(withoutPresentationPrefix)) return withoutPresentationPrefix;
 
   // Qwen occasionally repeats a path segment while copying an evidence ID,

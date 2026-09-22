@@ -34,3 +34,15 @@ test("does not over-normalize a prefixed-but-still-unknown ID", () => {
   const id = "EVIDENCE:bitget:tickers:ETHUSDT:2026-09-22T11:25:45.432Z";
   assert.equal(normalizeKnownEvidenceId(id, knownIds), id);
 });
+
+test("strips a colon-less EVIDENCE prefix, seen live in production", () => {
+  const knownManualIds = new Set(["ev-1"]);
+  const id = "EVIDENCE ev-1";
+  assert.equal(normalizeKnownEvidenceId(id, knownManualIds), "ev-1");
+});
+
+test("strips an 'Evidence ID:' prefix", () => {
+  const knownManualIds = new Set(["ev-1"]);
+  const id = "Evidence ID: ev-1";
+  assert.equal(normalizeKnownEvidenceId(id, knownManualIds), "ev-1");
+});
