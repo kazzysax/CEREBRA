@@ -23,6 +23,7 @@ import { createMemoryCourtJobRepository } from "./jobs/memory-repository.js";
 import { registerJobRoutes } from "./jobs/register-routes.js";
 import { createCourtJobWorker } from "./jobs/worker.js";
 import { registerOutcomeRoutes } from "./outcomes/register-routes.js";
+import { createAnonymousRateLimit } from "./security/anonymous-rate-limit.js";
 
 export async function buildApp(options: {
   host?: string | undefined;
@@ -38,6 +39,11 @@ export async function buildApp(options: {
     pollIntervalMs?: number | undefined;
     leaseMs?: number | undefined;
     maxAttempts?: number | undefined;
+  } | undefined;
+  anonymousRateLimit?: {
+    windowMs?: number | undefined;
+    maxRequests?: number | undefined;
+    now?: (() => number) | undefined;
   } | undefined;
   auth?: {
     mode: "open" | "agent-key";
@@ -106,7 +112,7 @@ export async function buildApp(options: {
     },
   }));
   registerAgentRoutes(app, auth);
-  registerCaseRoutes(app, { repository, evidenceProvider, courtProvider, auth });
+  registerCaseRoutes(app, { repository, evidenceProvider, courtProvider, auth, anonymousRateLimit: createAnonymousRateLimit(options.anonymousRateLimit) });
   registerMemoryRoutes(app, { repository: memoryRepository, auth });
   registerJobRoutes(app, {
     jobs: jobRepository,

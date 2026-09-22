@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, preHandlerHookHandler } from "fastify";
 import { caseSubmissionSchema, type CourtModelProvider } from "../agents/contracts.js";
 import type { EvidenceProvider } from "../evidence/contracts.js";
 import type { CaseRepository } from "../storage/contracts.js";
@@ -20,6 +20,7 @@ type CaseRouteOptions = {
   auth: AgentAuth;
   now?: (() => Date) | undefined;
   idFactory?: (() => string) | undefined;
+  anonymousRateLimit?: preHandlerHookHandler | undefined;
 };
 
 function validationError(reply: FastifyReply, code: string, error: { issues: Array<{ path: PropertyKey[]; message: string }> }) {
@@ -36,7 +37,9 @@ export function registerCaseRoutes(app: FastifyInstance, options: CaseRouteOptio
   const now = options.now ?? (() => new Date());
   const idFactory = options.idFactory ?? randomUUID;
 
-  app.post("/v1/cases", async (request, reply) => {
+  const rateLimitPreHandler = options.anonymousRateLimit ? [options.anonymousRateLimit] : [];
+
+  app.post("/v1/cases", { preHandler: rateLimitPreHandler }, async (request, reply) => {
     const agent = await resolveAgent(request, reply, options.auth);
     if (agent === undefined) return;
     const parsed = createCaseSchema.safeParse(request.body);
@@ -129,7 +132,7 @@ export function registerCaseRoutes(app: FastifyInstance, options: CaseRouteOptio
     }
   });
 
-  app.post("/v1/cases/:id/run", async (request, reply) => {
+  app.post("/v1/cases/:id/run", { preHandler: rateLimitPreHandler }, async (request, reply) => {
     const agent = await resolveAgent(request, reply, options.auth);
     if (agent === undefined) return;
     const params = idParamsSchema.safeParse(request.params);
