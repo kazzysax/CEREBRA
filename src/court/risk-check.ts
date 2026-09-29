@@ -127,6 +127,9 @@ export type ReferencePlan = {
   // False when the nearest structural stop (just beyond the recent swing) is
   // further than this horizon's budget allows, so the stop sits inside the range.
   stopBeyondSwing: boolean;
+  // Plain-language reading of the levels. Live judges misread the boolean
+  // flags as violations, so the plan states what they mean.
+  note: string;
 };
 
 // A budget-compliant plan per side sized to one horizon bar: stop just beyond
@@ -156,6 +159,17 @@ export function referencePlans(
     const rewardDistance = riskDistance * rewardMultiple;
     const stop = fix(long ? entry - riskDistance : entry + riskDistance);
     const target = fix(long ? entry + rewardDistance : entry - rewardDistance);
+    const swingLevel = fix(long ? candles.recentLow : candles.recentHigh);
+    const stopBeyondSwing = structuralStop <= maxRisk;
+    const targetBeyondSwing = long ? target > candles.swingHigh : target < candles.swingLow;
+    const note = [
+      stopBeyondSwing
+        ? `Stop ${stop} sits just ${long ? "below" : "above"} the recent swing ${long ? "low" : "high"} ${swingLevel}, the correct structural place for a ${direction} stop.`
+        : `The structural stop beyond the recent swing ${long ? "low" : "high"} ${swingLevel} is too far for this horizon's budget, so stop ${stop} sits inside the recent range and is more exposed to noise.`,
+      targetBeyondSwing
+        ? `Target ${target} lies beyond the window's swing ${long ? "high" : "low"}, so reaching it needs a breakout.`
+        : `Target ${target} lies inside the window's range.`,
+    ].join(" ");
     return {
       direction,
       entryPrice: fix(entry),
@@ -164,8 +178,9 @@ export function referencePlans(
       rewardRisk: round(Math.abs(target - entry) / Math.abs(entry - stop), 2),
       stopAtr: round(riskDistance / atr, 2),
       // Beyond the window's swing extreme the target needs a breakout to be reached.
-      targetBeyondSwing: long ? target > candles.swingHigh : target < candles.swingLow,
-      stopBeyondSwing: structuralStop <= maxRisk,
+      targetBeyondSwing,
+      stopBeyondSwing,
+      note,
     };
   };
   return { LONG: plan("LONG"), SHORT: plan("SHORT") };

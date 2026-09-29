@@ -294,3 +294,11 @@ test("the court reads the agent's own saved strategy and beliefs, marking expire
   assert.equal(seen[1], null);
   await app.close();
 });
+
+test("reference plans explain their stop placement in plain language", async () => {
+  const { referencePlans } = await import("../src/court/risk-check.js");
+  const plans = referencePlans(featureEvidence({ trend: "UP" })[0]!.metrics as never, "MEDIUM")!;
+  assert.match(plans.LONG.note, /just below the recent swing low|inside the recent range/);
+  assert.match(plans.SHORT.note, /just above the recent swing high|inside the recent range/);
+  assert.doesNotMatch(plans.LONG.note + plans.SHORT.note, /d.d{6,}/, "prices are rounded");
+});

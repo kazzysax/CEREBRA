@@ -261,7 +261,9 @@ export function createLlmCourtProvider(options: {
         "cerebra_" + context.judgeId.replaceAll("-", "_"),
         "Act independently as " + context.judgeId + " using only the " + context.lens + " lens. " +
           "Apply the supplied Court Doctrine and your seat mandate. Do not infer how other judges may vote. " +
-          "vote: your ballot on the Analyst's primary plan (APPROVE, REJECT, or ABSTAIN if your lens genuinely cannot assess it). " +
+          "vote: whether a position should be opened on the Analyst's primary plan: APPROVE to open it, REJECT not to, ABSTAIN only if your lens genuinely cannot assess it. " +
+          "If the primary plan is NEUTRAL (no trade), there is no position to open: vote REJECT and say in your rationale whether you agree that standing aside is right. " +
+          "Read each reference plan's note for what its stop and target placement means. " +
           (hasAlternative
             ? "alternativeVote: your separate ballot on the Analyst's alternativeRoute plan, judged on its own merits with the same doctrine; APPROVE or REJECT it, ABSTAIN only if your lens genuinely cannot assess it. "
             : "alternativeVote: null (no alternative route was offered). ") +
