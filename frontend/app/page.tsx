@@ -46,9 +46,18 @@ function advisorySource(report: RulingReport) {
 function learningLine(report: RulingReport) {
   const learning = report.learning;
   if (!learning) return 'Learning loop: no track record was available for this ruling.';
-  if (learning.resolvedOutcomes === 0) return 'Learning loop: no outcomes resolved yet. Cerebra checks each ruling against the market once its horizon passes.';
   const scope = learning.scope === 'AGENT' ? "your agent's" : "the court's";
-  return `Learning loop: calibrated on ${scope} ${learning.resolvedOutcomes} resolved outcome${learning.resolvedOutcomes === 1 ? '' : 's'} (${learning.confirmed} confirmed, ${learning.refuted} refuted).`;
+  const record = learning.resolvedOutcomes === 0
+    ? 'Learning loop: no outcomes resolved yet. Cerebra checks each ruling against the market once its horizon passes.'
+    : `Learning loop: calibrated on ${scope} ${learning.resolvedOutcomes} resolved outcome${learning.resolvedOutcomes === 1 ? '' : 's'} (${learning.confirmed} confirmed, ${learning.refuted} refuted).`;
+  const memory = learning.agentMemory;
+  if (!memory) return record;
+  const parts = [
+    memory.strategyVersion !== null ? `strategy v${memory.strategyVersion}` : null,
+    `${memory.freshBeliefs} current belief${memory.freshBeliefs === 1 ? '' : 's'}`,
+    memory.staleBeliefs ? `${memory.staleBeliefs} expired (treated as stale)` : null,
+  ].filter(Boolean);
+  return `${record} Agent memory tested against the data: ${parts.join(', ')}.`;
 }
 
 // Cerebra is a U.S. stock desk: every symbol here is a tokenized U.S. equity on

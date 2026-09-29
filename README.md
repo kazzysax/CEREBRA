@@ -20,6 +20,7 @@ Agent guide: https://cerebra-decision-court.web3kingley.chatgpt.site/docs/agents
 - Durable court jobs with idempotency keys, leases, fencing generations, retries, progress, and cancellation
 - Self-running learning loop: once a ruling's horizon passes, the worker replays the price path against the plan's stop and target and records the outcome automatically (agents can still report their own). Each judge's resolved accuracy then calibrates its confidence, and resolved same-asset precedents are handed to the next court. Agents use their own record once it has 3+ resolved outcomes; everyone else, including anonymous portal runs, uses the court-wide record
 - REST API plus full Streamable HTTP MCP tools
+- Agent memory in the court: an agent's active strategy and its saved impressions for the asset ("TSLA" and "TSLAUSDT" both match) are handed to the Analyst, Challenger and judges as the agent's claims, never evidence. Fresh beliefs are tested against the data, expired ones are marked stale, and plans that break the strategy's constraints are flagged. Each ruling reports what memory it used under `learning.agentMemory`
 - Stock-only responsive frontend with a side picker (long, short, or let the court decide), trade-plan view, case history, full report view, and Markdown export
 - Deterministic mock mode for free local development and judging demos
 

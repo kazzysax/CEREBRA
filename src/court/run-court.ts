@@ -21,6 +21,7 @@ import { advisoryDoctrineV2, type CourtDoctrine } from "./doctrine.js";
 import type { CourtPrecedent } from "./precedent.js";
 import { computeRiskCheck, type RiskCheck } from "./risk-check.js";
 import type { TrackRecord } from "./track-record.js";
+import type { AgentMemory } from "./agent-memory.js";
 
 export type CourtTraceEntry = {
   stage: "ANALYST" | "CHALLENGER" | "JUDGE";
@@ -54,6 +55,7 @@ type RunCourtOptions = {
   precedents?: CourtPrecedent[] | undefined;
   calibration?: JudgeCalibration[] | undefined;
   trackRecord?: TrackRecord | null | undefined;
+  agentMemory?: AgentMemory | null | undefined;
 };
 
 const emptyUsage: ModelUsage = {
@@ -199,8 +201,9 @@ export async function runCourt(
   const trace: CourtTraceEntry[] = [];
   const warnings: string[] = [];
   const trackRecord = options.trackRecord ?? null;
+  const agentMemory = options.agentMemory ?? null;
 
-  const analystCall = await provider.runAnalyst({ submission, precedents, trackRecord });
+  const analystCall = await provider.runAnalyst({ submission, precedents, trackRecord, agentMemory });
   trace.push(successfulTrace("ANALYST", null, analystCall));
   const analystCase = coherentAnalystCase(submission, {
     ...analystCall.output,
@@ -216,6 +219,7 @@ export async function runCourt(
     analystCase,
     precedents,
     riskCheck,
+    agentMemory,
   });
   trace.push(successfulTrace("CHALLENGER", null, challengerCall));
   const challenge: Challenge = {
@@ -240,6 +244,7 @@ export async function runCourt(
         calibration: calibrationByJudge.get(seat.judgeId) ?? null,
         riskCheck,
         trackRecord,
+        agentMemory,
       }),
     })),
   );
@@ -322,14 +327,23 @@ export async function runCourt(
     advisory: analystCase,
   });
   report.riskCheck = riskCheck as unknown as Record<string, unknown>;
-  report.learning = trackRecord
+  const memorySummary = agentMemory
     ? {
-      scope: trackRecord.scope,
-      resolvedOutcomes: trackRecord.resolved,
-      confirmed: trackRecord.confirmed,
-      refuted: trackRecord.refuted,
-      sameAssetPrecedents: trackRecord.sameAsset.length,
+      strategyVersion: agentMemory.strategy?.version ?? null,
+      freshBeliefs: agentMemory.fresh,
+      staleBeliefs: agentMemory.stale,
+      undatedBeliefs: agentMemory.beliefs.length - agentMemory.fresh - agentMemory.stale,
+    }
+    : null;
+  report.learning = trackRecord || agentMemory
+    ? {
+      scope: trackRecord?.scope ?? "COURT",
+      resolvedOutcomes: trackRecord?.resolved ?? 0,
+      confirmed: trackRecord?.confirmed ?? 0,
+      refuted: trackRecord?.refuted ?? 0,
+      sameAssetPrecedents: trackRecord?.sameAsset.length ?? 0,
       calibratedJudges: trace.filter((entry) => entry.calibration).map((entry) => entry.judgeId),
+      agentMemory: memorySummary,
     }
     : null;
   report.doctrine = {

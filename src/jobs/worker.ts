@@ -3,6 +3,7 @@ import type { CourtModelProvider } from "../agents/contracts.js";
 import { executeCase } from "../cases/execute-case.js";
 import type { EvidenceProvider } from "../evidence/contracts.js";
 import type { CaseRepository } from "../storage/contracts.js";
+import type { AgentMemoryRepository } from "../memory/contracts.js";
 import type { CourtJobRepository } from "./contracts.js";
 
 function retryable(error: unknown) {
@@ -14,6 +15,7 @@ export function createCourtJobWorker(options: {
   cases: CaseRepository;
   evidenceProvider: EvidenceProvider;
   courtProvider: CourtModelProvider;
+  memory?: AgentMemoryRepository | undefined;
   pollIntervalMs?: number | undefined;
   leaseMs?: number | undefined;
   workerId?: string | undefined;
@@ -34,7 +36,7 @@ export function createCourtJobWorker(options: {
     try {
       const result = await executeCase({
         caseId: job.caseId, agentId: job.agentId, refreshEvidence: job.refreshEvidence,
-        repository: options.cases, evidenceProvider: options.evidenceProvider, courtProvider: options.courtProvider,
+        repository: options.cases, evidenceProvider: options.evidenceProvider, courtProvider: options.courtProvider, memory: options.memory,
         onStage: async (stage) => { await options.jobs.updateStage(job.id, job.generation, stage, now().toISOString()); },
       });
       await options.jobs.completeJob(job.id, job.generation, result.runId, now().toISOString());

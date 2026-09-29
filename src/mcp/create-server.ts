@@ -109,7 +109,7 @@ export function createCerebraMcpServer(options: CerebraMcpOptions) {
       return result(await executeCase({
         caseId, agentId: ownerId(), refreshEvidence,
         repository: options.repository, evidenceProvider: options.evidenceProvider,
-        courtProvider: options.courtProvider, now, idFactory,
+        courtProvider: options.courtProvider, memory: options.memory, now, idFactory,
       }));
     },
   );

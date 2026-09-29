@@ -84,6 +84,7 @@ export async function buildApp(options: {
     cases: repository,
     evidenceProvider,
     courtProvider,
+    memory: memoryRepository,
     pollIntervalMs: options.jobs?.pollIntervalMs,
     leaseMs: options.jobs?.leaseMs,
   });
@@ -122,7 +123,7 @@ export async function buildApp(options: {
     },
   }));
   registerAgentRoutes(app, auth);
-  registerCaseRoutes(app, { repository, evidenceProvider, courtProvider, auth, anonymousRateLimit: createAnonymousRateLimit(options.anonymousRateLimit) });
+  registerCaseRoutes(app, { repository, evidenceProvider, courtProvider, memory: memoryRepository, auth, anonymousRateLimit: createAnonymousRateLimit(options.anonymousRateLimit) });
   registerMemoryRoutes(app, { repository: memoryRepository, auth });
   registerJobRoutes(app, {
     jobs: jobRepository,

@@ -42,6 +42,11 @@ const sharedSystem = [
 
 const summaryCap = 4_000;
 
+const MEMORY_INSTRUCTION =
+  "agentMemory (if supplied) is the agent's own saved strategy and beliefs about this asset. It is the agent's claim, not evidence, and must never be cited as evidence: " +
+  "test FRESH beliefs against the measured data and say plainly when the data contradicts them; treat EXPIRED beliefs as stale and do not rely on them; " +
+  "respect the strategy's constraints and invalidation conditions, and flag a plan that breaks them.";
+
 export type EvidenceView = {
   items: Array<{ ref: string; title: string; source: string; observedAt: string; summary: string }>;
   resolve(citation: string): string;
@@ -204,8 +209,14 @@ export function createLlmCourtProvider(options: {
           "The horizon is about one candle of the stated timeframe, and ATR is roughly one candle's range: size the stop and target so they can realistically print within that horizon. " +
           "Mention unverifiable catalysts in the thesis as unverified context, not as proof. " +
           "alternativeRoute: if the data supports the opposite side better than the submitted/selected one, give that plan with numeric levels; otherwise direction NEUTRAL with null prices. " +
-          "If a track record is supplied, say how past outcomes on this asset change your view. Confidence is a probability, not a feeling.",
-        { ...casePayload(context.submission, view), precedents: context.precedents, trackRecord: context.trackRecord ?? null },
+          "If a track record is supplied, say how past outcomes on this asset change your view. " +
+          MEMORY_INSTRUCTION + " Confidence is a probability, not a feeling.",
+        {
+          ...casePayload(context.submission, view),
+          precedents: context.precedents,
+          trackRecord: context.trackRecord ?? null,
+          agentMemory: context.agentMemory ?? null,
+        },
       );
       const output = result.output;
       return {
@@ -223,12 +234,14 @@ export function createLlmCourtProvider(options: {
         challengeSchema,
         "cerebra_challenge",
         "Act as the Challenger. Stress-test the Analyst plan against the measured data and the court's computed risk check: wrong-way trend or flow, levels inside noise, reward/risk short of budget, event or funding risk. " +
+          "If agentMemory is supplied, object where the agent's saved beliefs or strategy constraints conflict with the data or the plan. " +
           "Grade severity honestly: CRITICAL only when the plan fails outright (levels on the wrong side, budget clearly failed, or data flatly contradicts the direction); do not inflate severity to sound rigorous.",
         {
           ...casePayload(context.submission, view),
           analystCase: context.analystCase,
           riskCheck: context.riskCheck ?? null,
           precedents: context.precedents,
+          agentMemory: context.agentMemory ?? null,
         },
       );
       return {
@@ -253,6 +266,7 @@ export function createLlmCourtProvider(options: {
             ? "alternativeVote: your separate ballot on the Analyst's alternativeRoute plan, judged on its own merits with the same doctrine; APPROVE or REJECT it, ABSTAIN only if your lens genuinely cannot assess it. "
             : "alternativeVote: null (no alternative route was offered). ") +
           "reasonCode must agree with your vote. Treat the computed riskCheck as fact. " +
+          MEMORY_INSTRUCTION + " " +
           "If calibration data is supplied, it reports your own accuracy on resolved outcomes; let it temper the confidence you report without changing your vote on this case's evidence.",
         {
           ...casePayload(context.submission, view),
@@ -261,6 +275,7 @@ export function createLlmCourtProvider(options: {
           riskCheck: context.riskCheck ?? null,
           precedents: context.precedents,
           trackRecord: context.trackRecord ?? null,
+          agentMemory: context.agentMemory ?? null,
           calibration: context.calibration,
           doctrine: {
             id: context.doctrine.id,

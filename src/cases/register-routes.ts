@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, preHandlerHookHandler } from "fasti
 import { caseSubmissionSchema, type CourtModelProvider } from "../agents/contracts.js";
 import type { EvidenceProvider } from "../evidence/contracts.js";
 import type { CaseRepository } from "../storage/contracts.js";
+import type { AgentMemoryRepository } from "../memory/contracts.js";
 import type { AgentAuth } from "../identity/auth.js";
 import { resolveAgent } from "../identity/register-routes.js";
 import { CaseExecutionError, executeCase } from "./execute-case.js";
@@ -17,6 +18,7 @@ type CaseRouteOptions = {
   repository: CaseRepository;
   evidenceProvider: EvidenceProvider;
   courtProvider: CourtModelProvider;
+  memory?: AgentMemoryRepository | undefined;
   auth: AgentAuth;
   now?: (() => Date) | undefined;
   idFactory?: (() => string) | undefined;
@@ -148,6 +150,7 @@ export function registerCaseRoutes(app: FastifyInstance, options: CaseRouteOptio
         repository: options.repository,
         evidenceProvider: options.evidenceProvider,
         courtProvider: options.courtProvider,
+        memory: options.memory,
         now,
         idFactory,
       });

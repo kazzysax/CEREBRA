@@ -4,6 +4,8 @@ import { runCourt, type CourtRunResult } from "../court/run-court.js";
 import { renderRulingMarkdown } from "../domain/report-renderer.js";
 import type { EvidenceProvider } from "../evidence/contracts.js";
 import type { CaseRepository } from "../storage/contracts.js";
+import type { AgentMemoryRepository } from "../memory/contracts.js";
+import { loadAgentMemory } from "../court/agent-memory.js";
 
 export class CaseExecutionError extends Error {
   constructor(readonly code: "CASE_NOT_FOUND" | "COURT_RUN_FAILED", message: string, readonly runId?: string) {
@@ -19,6 +21,8 @@ export async function executeCase(options: {
   repository: CaseRepository;
   evidenceProvider: EvidenceProvider;
   courtProvider: CourtModelProvider;
+  // The agent's saved strategies and impressions; read-only here.
+  memory?: AgentMemoryRepository | undefined;
   now?: (() => Date) | undefined;
   idFactory?: (() => string) | undefined;
   onStage?: ((stage: "EVIDENCE" | "RECORD" | "ANALYST" | "PERSISTING") => Promise<void>) | undefined;
@@ -59,6 +63,14 @@ export async function executeCase(options: {
       asset: record.submission.proposal.asset,
     }).catch(() => null);
     const calibration = trackRecord?.judges ?? [];
+    const agentMemory = options.agentId && options.memory
+      ? await loadAgentMemory({
+        memory: options.memory,
+        agentId: options.agentId,
+        asset: record.submission.proposal.asset,
+        now: now(),
+      }).catch(() => null)
+      : null;
     const startedAt = now().toISOString();
     await options.repository.setCaseStatus(record.id, "RUNNING", startedAt);
     await options.repository.createRun({
@@ -73,6 +85,7 @@ export async function executeCase(options: {
       precedents,
       calibration,
       trackRecord,
+      agentMemory,
     });
     await options.onStage?.("PERSISTING");
     await options.repository.completeRun(runId, result, renderRulingMarkdown(result.report));

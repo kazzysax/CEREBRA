@@ -21,7 +21,10 @@ export type RulingReport = {
     entryPrice?: number | null; stopPrice?: number | null; targetPrice?: number | null; rewardRisk?: number | null;
   };
   alternativeTally?: { approve: number; reject: number; abstain: number } | null;
-  learning?: { scope: 'AGENT' | 'COURT'; resolvedOutcomes: number; confirmed: number; refuted: number; sameAssetPrecedents: number } | null;
+  learning?: {
+    scope: 'AGENT' | 'COURT'; resolvedOutcomes: number; confirmed: number; refuted: number; sameAssetPrecedents: number;
+    agentMemory?: { strategyVersion: number | null; freshBeliefs: number; staleBeliefs: number; undatedBeliefs: number } | null;
+  } | null;
   integrity?: { errors: string[]; warnings?: string[] };
 };
 export type CourtRunResult = {

@@ -13,6 +13,7 @@ import type { CourtPrecedent } from "../court/precedent.js";
 import type { JudgeCalibration } from "../outcomes/contracts.js";
 import type { RiskCheck } from "../court/risk-check.js";
 import type { TrackRecord } from "../court/track-record.js";
+import type { AgentMemory } from "../court/agent-memory.js";
 
 export const proposalSchema = z.object({
   id: z.string().trim().min(1).optional(),
@@ -111,6 +112,8 @@ export type AnalystContext = {
   submission: CaseSubmission;
   precedents: CourtPrecedent[];
   trackRecord?: TrackRecord | null | undefined;
+  // The agent's own saved strategy and beliefs for this asset (context, not evidence).
+  agentMemory?: AgentMemory | null | undefined;
 };
 
 export type ChallengerContext = {
@@ -118,6 +121,7 @@ export type ChallengerContext = {
   analystCase: AnalystCase;
   precedents: CourtPrecedent[];
   riskCheck?: RiskCheck | null | undefined;
+  agentMemory?: AgentMemory | null | undefined;
 };
 
 export type JudgeContext = {
@@ -133,6 +137,7 @@ export type JudgeContext = {
   // Deterministic reward/risk and trend-alignment checks computed by the court.
   riskCheck?: RiskCheck | null | undefined;
   trackRecord?: TrackRecord | null | undefined;
+  agentMemory?: AgentMemory | null | undefined;
 };
 
 export interface CourtModelProvider {

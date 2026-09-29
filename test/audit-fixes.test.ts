@@ -242,3 +242,55 @@ test("every reference plan passes the court's own risk check, on every posture a
     }
   }
 });
+
+test("the court reads the agent's own saved strategy and beliefs, marking expired ones stale", async () => {
+  const seen: Array<import("../src/court/agent-memory.js").AgentMemory | null | undefined> = [];
+  const mock = createMockCourtProvider();
+  const spying: typeof mock = {
+    ...mock,
+    async runAnalyst(context) { seen.push(context.agentMemory); return mock.runAnalyst(context); },
+  };
+  const app = await buildApp({ auth, courtProvider: spying });
+  const register = async (name: string) => (await app.inject({
+    method: "POST", url: "/v1/agents/register",
+    headers: { "x-cerebra-registration-token": registrationToken }, payload: { name },
+  })).json().apiKey as string;
+  const owner = { authorization: "Bearer " + await register("Memory Agent") };
+  const other = { authorization: "Bearer " + await register("Other Agent") };
+
+  // Saved as "TSLA"; the case uses "TSLAUSDT" — both must match.
+  assert.equal((await app.inject({ method: "POST", url: "/v1/memory/strategies", headers: owner, payload: {
+    asset: "TSLA", timeframe: "4h", thesis: "Trade TSLA only with the 4h trend; never add to losers.",
+    constraints: ["No counter-trend entries"], invalidationConditions: ["Daily close below 340"],
+  } })).statusCode, 201);
+  const future = new Date(Date.now() + 86_400_000).toISOString();
+  const past = new Date(Date.now() - 86_400_000).toISOString();
+  for (const [statement, validUntil] of [["Deliveries beat should keep TSLA bid this week", future], ["Pre-earnings drift is upward", past]] as const) {
+    assert.equal((await app.inject({ method: "POST", url: "/v1/memory/impressions", headers: owner, payload: {
+      asset: "TSLAUSDT", statement, confidence: 0.6, validUntil,
+    } })).statusCode, 201);
+  }
+  await app.inject({ method: "POST", url: "/v1/memory/impressions", headers: other, payload: {
+    asset: "TSLAUSDT", statement: "Another agent's private belief", confidence: 0.9,
+  } });
+
+  const created = await app.inject({ method: "POST", url: "/v1/cases", headers: owner, payload: manualCase });
+  const run = await app.inject({ method: "POST", url: "/v1/cases/" + created.json().id + "/run", headers: owner, payload: { refreshEvidence: false } });
+  assert.equal(run.statusCode, 201);
+
+  const memory = seen[0]!;
+  assert.equal(memory.strategy?.version, 1);
+  assert.deepEqual(memory.strategy?.constraints, ["No counter-trend entries"]);
+  assert.equal(memory.beliefs.length, 2);
+  assert.equal(memory.fresh, 1);
+  assert.equal(memory.stale, 1);
+  assert.equal(memory.beliefs.find((belief) => belief.freshness === "EXPIRED")?.statement, "Pre-earnings drift is upward");
+  assert.ok(!memory.beliefs.some((belief) => belief.statement.includes("Another agent")));
+  assert.deepEqual(run.json().report.learning.agentMemory, { strategyVersion: 1, freshBeliefs: 1, staleBeliefs: 1, undatedBeliefs: 0 });
+
+  // Anonymous runs have no agent memory to read.
+  const anonymous = await app.inject({ method: "POST", url: "/v1/cases", payload: manualCase });
+  await app.inject({ method: "POST", url: "/v1/cases/" + anonymous.json().id + "/run", payload: { refreshEvidence: false } });
+  assert.equal(seen[1], null);
+  await app.close();
+});
