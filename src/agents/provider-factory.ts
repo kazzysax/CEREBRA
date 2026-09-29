@@ -29,6 +29,7 @@ export function createConfiguredCourtProvider(config: AiConfig): CourtModelProvi
     apiKey: config.qwenApiKey,
     baseURL: config.qwenBaseURL,
     model: config.qwenModel,
+    fallbackModels: config.qwenFallbackModels,
     timeoutMs: config.timeoutMs,
     maxRetries: config.maxRetries,
   });

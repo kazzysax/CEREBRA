@@ -5,17 +5,15 @@ import { createMockCourtProvider } from "../src/agents/mock-provider.js";
 import { createMockEvidenceProvider } from "../src/evidence/mock-evidence-provider.js";
 import type { CaseRecord, CaseRepository } from "../src/storage/contracts.js";
 import { createMemoryCaseRepository } from "../src/storage/memory-repository.js";
+import { featureEvidence } from "./fixtures.js";
 
 const submission = {
   proposal: {
-    asset: "BTCUSDT", market: "spot", timeframe: "4h",
-    summary: "Execute-case hardening test: evaluate a provisional BTC long thesis.",
+    asset: "TSLAUSDT", market: "usdt-futures", timeframe: "4h", direction: "LONG" as const,
+    summary: "Execute-case hardening test: evaluate a provisional TSLA long thesis.",
   },
   riskLevel: "MEDIUM" as const,
-  evidence: [{
-    id: "ev-1", title: "BTC snapshot", source: "test",
-    observedAt: "2026-09-22T00:00:00.000Z", digest: "sha256:test",
-  }],
+  evidence: featureEvidence({ trend: "UP" }),
 };
 
 async function seedCase(repository: CaseRepository, agentId: string): Promise<CaseRecord> {
@@ -74,7 +72,7 @@ test("survives a failed calibration lookup instead of failing the whole run", as
   await seedCase(repository, "agent-a");
   const brokenCalibration: CaseRepository = {
     ...repository,
-    getJudgeCalibration: async () => { throw new Error("simulated calibration read failure"); },
+    getTrackRecord: async () => { throw new Error("simulated track-record read failure"); },
   };
 
   const result = await executeCase({
@@ -90,5 +88,21 @@ test("survives a failed calibration lookup instead of failing the whole run", as
   // run still completed with a real ruling rather than aborting.
   assert.equal(result.trace.every((entry) => entry.calibration === null), true);
   assert.equal(result.report.status, "SUPPORTED");
+  assert.equal(result.report.learning, null);
+  await repository.close();
+});
+
+test("anonymous runs learn from the court-wide record once outcomes resolve", async () => {
+  const repository = createMemoryCaseRepository();
+  await repository.createCase({
+    id: "anon-case", agentId: null, evidenceMode: "MANUAL", status: "READY",
+    createdAt: "2026-09-22T00:00:00.000Z", updatedAt: "2026-09-22T00:00:00.000Z", submission,
+  });
+  const run = await executeCase({
+    caseId: "anon-case", agentId: null, refreshEvidence: false, repository,
+    evidenceProvider: createMockEvidenceProvider(), courtProvider: createMockCourtProvider(),
+  });
+  assert.equal(run.report.learning?.scope, "COURT");
+  assert.equal(run.report.learning?.resolvedOutcomes, 0);
   await repository.close();
 });

@@ -9,15 +9,18 @@ Agent guide: https://cerebra-decision-court.web3kingley.chatgpt.site/docs/agents
 
 - Five-agent court: Analyst, Challenger, Risk Judge, Evidence Judge, Strategy Judge
 - Equal-weight majority voting with explicit dissent, abstention, unavailable, and invalid states
-- Live Bitget public ticker, order-book, and candle evidence
+- Live Bitget ticker, order-book, and candle evidence for tokenized U.S. stocks (USDT futures only; Bitget lists no spot market for them)
+- Measured market features computed in code (trend, returns, ATR, key levels, order-book imbalance, funding), newest candles first, so the court judges facts instead of raw arrays
+- Concrete trade plans: every directional ruling carries entry, stop and target prices, with reward/risk and stop distance checked deterministically against the risk posture's budget
+- Doctrine v2: judges rule on the measured setup, so approval and rejection are both reachable; the alternative route is only actionable if a majority of judges approve it separately
 - Claude and Qwen adapters with validated structured output, retries, timeouts, and usage traces
 - PostgreSQL persistence for identities, cases, runs, all agent outputs, reports, and dissent
 - Agent registration, bearer-key authentication, rotation, revocation, and tenant isolation
 - Immutable strategy versions, timestamped impressions, memory recall, and recovery checkpoints
 - Durable court jobs with idempotency keys, leases, fencing generations, retries, progress, and cancellation
-- Post-trade outcome recording with a judge calibration feedback loop: an agent reports what actually happened after a ruling, and each judge's own resolved accuracy then tempers (or reinforces) its stated confidence on every future ruling for that agent
+- Self-running learning loop: once a ruling's horizon passes, the worker replays the price path against the plan's stop and target and records the outcome automatically (agents can still report their own). Each judge's resolved accuracy then calibrates its confidence, and resolved same-asset precedents are handed to the next court. Agents use their own record once it has 3+ resolved outcomes; everyone else, including anonymous portal runs, uses the court-wide record
 - REST API plus full Streamable HTTP MCP tools
-- Stock-first responsive frontend, case history, full report view, and Markdown export
+- Stock-only responsive frontend with a side picker (long, short, or let the court decide), trade-plan view, case history, full report view, and Markdown export
 - Deterministic mock mode for free local development and judging demos
 
 ## Local development
@@ -85,7 +88,8 @@ Identity endpoints:
 - `GET /v1/runs/:id/report` — retrieve the full Decision Kit and Markdown report
 - `POST /v1/runs/:id/outcomes` — record a later observed outcome for post-ruling review; feeds the judge calibration feedback loop
 - `GET /v1/runs/:id/outcomes` — list recorded outcomes for a run
-- `GET /v1/judges/calibration` — each judge's accuracy from recorded outcomes (resolved, correct, incorrect, accuracy)
+- `GET /v1/judges/calibration` — each judge's accuracy from this agent's resolved outcomes (resolved, correct, incorrect, accuracy)
+- `GET /v1/court/learning` — public, aggregate-only court-wide judge accuracy (no case content)
 - `POST /v1/memory/strategies` — save an immutable strategy version
 - `GET /v1/memory/strategies` — list strategy lineage
 - `POST /v1/memory/impressions` — store a timestamped market belief
@@ -99,10 +103,12 @@ Example:
 curl -X POST http://127.0.0.1:3100/v1/cases \
   -H "Authorization: Bearer $CEREBRA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"proposal":{"asset":"BTCUSDT","market":"spot","timeframe":"4h","summary":"Evaluate a provisional BTC long thesis over four hours."},"riskLevel":"MEDIUM","evidenceMode":"BITGET"}'
+  -d '{"proposal":{"asset":"TSLAUSDT","market":"usdt-futures","timeframe":"4h","direction":"LONG","summary":"Evaluate a provisional TSLA long over four hours."},"riskLevel":"MEDIUM","evidenceMode":"BITGET"}'
 ~~~
 
-Bitget public market evidence does not require a Bitget API key.
+`direction` is `LONG`, `SHORT`, or `EITHER` (default), which lets the court pick the side the data supports. Bitget public market evidence does not require a Bitget API key.
+
+Privacy: an agent key sees only that agent's records; requests without a key see only anonymous (portal) records, never agent-owned ones.
 
 ## MCP
 

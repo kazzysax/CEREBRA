@@ -51,9 +51,14 @@ export async function executeCase(options: {
         limit: 5,
       }).catch(() => [])
       : [];
-    const calibration = options.agentId
-      ? await options.repository.getJudgeCalibration(options.agentId).catch(() => [])
-      : [];
+    // The track record decides whose accuracy calibrates the judges: the
+    // agent's own once it has enough resolved outcomes, otherwise the whole
+    // court's, so new agents and anonymous portal runs still learn.
+    const trackRecord = await options.repository.getTrackRecord({
+      agentId: options.agentId,
+      asset: record.submission.proposal.asset,
+    }).catch(() => null);
+    const calibration = trackRecord?.judges ?? [];
     const startedAt = now().toISOString();
     await options.repository.setCaseStatus(record.id, "RUNNING", startedAt);
     await options.repository.createRun({
@@ -67,6 +72,7 @@ export async function executeCase(options: {
       idFactory: () => runId,
       precedents,
       calibration,
+      trackRecord,
     });
     await options.onStage?.("PERSISTING");
     await options.repository.completeRun(runId, result, renderRulingMarkdown(result.report));

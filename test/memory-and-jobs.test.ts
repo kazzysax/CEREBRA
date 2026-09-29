@@ -69,7 +69,7 @@ test("claims and completes an addressable durable court job", async () => {
     id: "case-job", agentId: "agent-job", evidenceMode: "MANUAL", status: "READY",
     createdAt: timestamp, updatedAt: timestamp,
     submission: {
-      proposal: { id: "proposal-job", asset: "BTCUSDT", market: "spot", timeframe: "4h", summary: "Evaluate a bounded BTC position with a human execution gate." },
+      proposal: { id: "proposal-job", asset: "BTCUSDT", market: "usdt-futures", timeframe: "4h", direction: "LONG", summary: "Evaluate a bounded BTC position with a human execution gate." },
       riskLevel: "MEDIUM",
       evidence: [{ id: "evidence-job", title: "Market snapshot", source: "test", observedAt: timestamp, digest: "sha256:job" }],
     },
@@ -103,7 +103,7 @@ test("job API deduplicates submissions and exposes completed progress to its own
   const created = await app.inject({
     method: "POST", url: "/v1/cases", headers,
     payload: {
-      proposal: { asset: "ETHUSDT", market: "spot", timeframe: "1h", summary: "Evaluate a bounded ETH thesis through the durable queue." },
+      proposal: { asset: "ETHUSDT", market: "usdt-futures", timeframe: "1h", summary: "Evaluate a bounded ETH thesis through the durable queue." },
       riskLevel: "MEDIUM", evidenceMode: "MANUAL",
       evidence: [{ id: "queue-evidence", title: "Queue snapshot", source: "test", observedAt: "2026-09-18T00:00:00.000Z", digest: "sha256:queue" }],
     },

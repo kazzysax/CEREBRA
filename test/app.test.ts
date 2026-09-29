@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildApp } from "../src/app.js";
+import { featureEvidence } from "./fixtures.js";
 
 test("health and metadata endpoints expose the court topology", async () => {
   const app = await buildApp();
@@ -60,18 +61,14 @@ test("court-run endpoint returns Analyst, Challenger, votes, and dissent", async
       proposal: {
         id: "eth-proposal",
         asset: "ETHUSDT",
-        market: "spot",
+        market: "usdt-futures",
         timeframe: "1h",
+        direction: "LONG",
         summary: "Evaluate a provisional ETH long thesis over the next hour.",
       },
       riskLevel: "MEDIUM",
-      evidence: [{
-        id: "eth-evidence-1",
-        title: "Synthetic ETH snapshot",
-        source: "api-test",
-        observedAt: "2026-09-17T10:00:00.000Z",
-        digest: "sha256:eth-test",
-      }],
+      // Uptrend with an ask-heavy book: supported long, strategy judge dissents on flow.
+      evidence: featureEvidence({ asset: "ETHUSDT", trend: "UP", depth: "ASK_HEAVY" }),
     },
   });
 
@@ -81,7 +78,10 @@ test("court-run endpoint returns Analyst, Challenger, votes, and dissent", async
   assert.equal(body.analystCase.recommendation, "APPROVE");
   assert.ok(body.challenge.objections.length > 0);
   assert.equal(body.report.judges.length, 3);
-  assert.deepEqual(body.report.dissentingJudgeIds, ["judge-risk"]);
+  assert.deepEqual(body.report.dissentingJudgeIds, ["judge-strategy"]);
+  assert.equal(body.report.recommendation.status, "ACTIONABLE");
+  assert.equal(body.report.recommendation.direction, "LONG");
+  assert.ok(body.report.recommendation.stopPrice < body.report.recommendation.entryPrice);
   await app.close();
 });
 

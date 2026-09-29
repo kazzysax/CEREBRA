@@ -2,7 +2,8 @@ import type { CaseSubmission } from "../agents/contracts.js";
 import type { CourtRunResult } from "../court/run-court.js";
 import type { EvidenceReference, RulingReport } from "../domain/contracts.js";
 import type { CourtPrecedent, PrecedentQuery } from "../court/precedent.js";
-import type { JudgeCalibration, OutcomeRecord } from "../outcomes/contracts.js";
+import type { AwaitingOutcome, JudgeCalibration, OutcomeRecord } from "../outcomes/contracts.js";
+import type { TrackRecord } from "../court/track-record.js";
 
 export type EvidenceMode = "BITGET" | "MANUAL";
 export type CaseStatus = "READY" | "RUNNING" | "COMPLETED" | "FAILED";
@@ -37,6 +38,8 @@ export type StoredReport = {
   createdAt: string;
 };
 
+// Ownership rule for every read below: an agentId sees only its own records;
+// null (an anonymous caller) sees only anonymous records, never agent-owned ones.
 export interface CaseRepository {
   readonly name: string;
   createCase(record: CaseRecord): Promise<CaseRecord>;
@@ -53,6 +56,10 @@ export interface CaseRepository {
   findPrecedents(query: PrecedentQuery): Promise<CourtPrecedent[]>;
   saveOutcome(record: OutcomeRecord): Promise<OutcomeRecord>;
   listOutcomes(runId: string, agentId?: string | null): Promise<OutcomeRecord[]>;
-  getJudgeCalibration(agentId: string): Promise<JudgeCalibration[]>;
+  // agentId null = court-wide accuracy across every resolved outcome.
+  getJudgeCalibration(agentId: string | null): Promise<JudgeCalibration[]>;
+  getTrackRecord(query: { agentId: string | null; asset: string }): Promise<TrackRecord>;
+  // Internal (resolver only): completed runs that have no outcome recorded yet.
+  listRunsAwaitingOutcome(completedBefore: string, limit: number): Promise<AwaitingOutcome[]>;
   close(): Promise<void>;
 }

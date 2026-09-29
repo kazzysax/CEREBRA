@@ -11,12 +11,17 @@ import {
 import type { CourtDoctrine } from "../court/doctrine.js";
 import type { CourtPrecedent } from "../court/precedent.js";
 import type { JudgeCalibration } from "../outcomes/contracts.js";
+import type { RiskCheck } from "../court/risk-check.js";
+import type { TrackRecord } from "../court/track-record.js";
 
 export const proposalSchema = z.object({
   id: z.string().trim().min(1).optional(),
   asset: z.string().trim().min(1).max(40),
-  market: z.string().trim().min(1).max(40).default("spot"),
+  market: z.string().trim().min(1).max(40).default("usdt-futures"),
   timeframe: z.string().trim().min(1).max(40),
+  // The side the agent wants judged. EITHER asks the court to pick the side the
+  // measured data supports (or none).
+  direction: z.enum(["LONG", "SHORT", "EITHER"]).default("EITHER"),
   summary: z.string().trim().min(10).max(4_000),
 });
 
@@ -31,8 +36,12 @@ const citedClaimSchema = z.object({
   claim: z.string().trim().min(1).max(1_000),
   evidenceIds: z.array(z.string().trim().min(1)).min(1).max(10),
 });
+const priceLevel = z.number().positive().nullable();
 const advisoryRouteSchema = z.object({
   direction: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+  entryPrice: priceLevel,
+  stopPrice: priceLevel,
+  targetPrice: priceLevel,
   timing: z.string().trim().min(1).max(240),
   rationale: z.string().trim().min(1).max(2_000),
   conditions: z.array(z.string().trim().min(1).max(500)).min(1).max(5),
@@ -42,6 +51,9 @@ const advisoryRouteSchema = z.object({
 export const analystCaseSchema = z.object({
   recommendation: z.enum(["APPROVE", "REJECT"]),
   marketBias: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+  entryPrice: priceLevel,
+  stopPrice: priceLevel,
+  targetPrice: priceLevel,
   entryWindow: z.string().trim().min(1).max(240),
   entryConditions: z.array(z.string().trim().min(1).max(500)).min(1).max(5),
   invalidation: z.string().trim().min(1).max(1_000),
@@ -67,6 +79,8 @@ export type Challenge = z.infer<typeof challengeSchema>;
 
 export const judgeDecisionSchema = z.object({
   vote: voteSchema,
+  // Ballot on the Analyst's alternative route; null when no alternative was offered.
+  alternativeVote: voteSchema.nullable(),
   confidence: z.number().min(0).max(1),
   reasonCode: reasonCodeSchema,
   rationale: z.string().trim().min(1).max(2_000),
@@ -96,12 +110,14 @@ export type ModelCall<T> = {
 export type AnalystContext = {
   submission: CaseSubmission;
   precedents: CourtPrecedent[];
+  trackRecord?: TrackRecord | null | undefined;
 };
 
 export type ChallengerContext = {
   submission: CaseSubmission;
   analystCase: AnalystCase;
   precedents: CourtPrecedent[];
+  riskCheck?: RiskCheck | null | undefined;
 };
 
 export type JudgeContext = {
@@ -114,6 +130,9 @@ export type JudgeContext = {
   precedents: CourtPrecedent[];
   // This judge's own accuracy on resolved post-trade outcomes, if enough history exists.
   calibration: JudgeCalibration | null;
+  // Deterministic reward/risk and trend-alignment checks computed by the court.
+  riskCheck?: RiskCheck | null | undefined;
+  trackRecord?: TrackRecord | null | undefined;
 };
 
 export interface CourtModelProvider {

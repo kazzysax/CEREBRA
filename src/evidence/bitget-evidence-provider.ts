@@ -6,7 +6,13 @@ import {
   safeInvoke,
 } from "@bitget-ai/bitget-agent-sdk";
 import type { EvidenceReference } from "../domain/contracts.js";
-import type { EvidenceCollectionRequest, EvidenceProvider } from "./contracts.js";
+import type { EvidenceCollectionRequest, EvidenceProvider, PriceHistoryRequest } from "./contracts.js";
+import {
+  computeMarketFeatures,
+  parseCandles,
+  renderCandleTable,
+  renderFeatureSummary,
+} from "./market-features.js";
 
 type MarketAction = "tickers" | "orderbook" | "candles";
 export type BitgetMarketInvoker = (
@@ -42,7 +48,7 @@ function compactSummary(action: MarketAction, value: unknown): string {
     (serialized.length <= maximum ? serialized : serialized.slice(0, maximum) + "...[truncated]");
 }
 
-function categoryFor(market: string): string {
+export function categoryFor(market: string): string {
   const normalized = market.trim().toLowerCase().replaceAll("_", "-");
   if (["future", "futures", "perp", "perpetual", "usdt-futures"].includes(normalized)) {
     return "USDT-FUTURES";
@@ -52,7 +58,7 @@ function categoryFor(market: string): string {
   return "SPOT";
 }
 
-function intervalFor(timeframe: string): string {
+export function intervalFor(timeframe: string): string {
   const normalized = timeframe.trim().toLowerCase();
   const intervals: Record<string, string> = {
     "1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m",
@@ -84,6 +90,10 @@ function createDefaultInvoker(): BitgetMarketInvoker {
   );
 }
 
+function digestOf(value: unknown): string {
+  return "sha256:" + createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
 export function createBitgetEvidenceProvider(
   options: BitgetEvidenceProviderOptions = {},
 ): EvidenceProvider {
@@ -110,24 +120,57 @@ export function createBitgetEvidenceProvider(
         },
         {
           action: "candles",
-          input: { category, symbol, interval, limit: "24", view: "summary" },
+          input: { category, symbol, interval, limit: "48", view: "summary" },
           uri: "https://api.bitget.com/api/v3/market/candles",
         },
       ];
 
-      return Promise.all(calls.map(async ({ action, input, uri }) => {
-        const data = unwrapInvocation(await invoke(action, input));
-        const raw = { action, category, symbol, interval, data };
-        return {
-          id: "bitget:" + action + ":" + symbol + ":" + observedAt,
-          title: "Bitget " + symbol + " " + action + " snapshot",
-          source: "bitget-agent-sdk",
-          observedAt,
-          uri,
-          digest: "sha256:" + createHash("sha256").update(stableJson(raw)).digest("hex"),
-          summary: compactSummary(action, data),
-        };
+      const responses = await Promise.all(calls.map(async (call) => ({
+        ...call,
+        data: unwrapInvocation(await invoke(call.action, call.input)),
+      })));
+      const [tickerData, orderbookData, candleData] = responses.map((response) => response.data);
+      const candles = parseCandles(candleData);
+
+      const raw: EvidenceReference[] = responses.map(({ action, uri, data }) => ({
+        id: "bitget:" + action + ":" + symbol + ":" + observedAt,
+        title: "Bitget " + symbol + " " + action + " snapshot",
+        source: "bitget-agent-sdk",
+        observedAt,
+        uri,
+        digest: digestOf({ action, category, symbol, interval, data }),
+        summary: action === "candles" && candles.length
+          ? "Bitget " + interval + " candles for " + symbol + ". " + renderCandleTable(candles)
+          : compactSummary(action, data),
       }));
+
+      const features = computeMarketFeatures({
+        symbol, interval, observedAt,
+        ticker: tickerData, orderbook: orderbookData, candles: candleData,
+      });
+      const featureEvidence: EvidenceReference = {
+        id: "cerebra:features:" + symbol + ":" + observedAt,
+        title: symbol + " measured market features",
+        source: "cerebra-market-features",
+        observedAt,
+        digest: digestOf(features),
+        summary: renderFeatureSummary(features),
+        metrics: features as unknown as Record<string, unknown>,
+      };
+      return [featureEvidence, ...raw];
+    },
+
+    async priceHistory(request: PriceHistoryRequest) {
+      const data = unwrapInvocation(await invoke("candles", {
+        category: categoryFor(request.market),
+        symbol: request.asset.trim().toUpperCase(),
+        interval: request.interval,
+        startTime: String(request.startMs),
+        endTime: String(request.endMs),
+        limit: "200",
+        view: "summary",
+      }));
+      return parseCandles(data).filter((candle) => candle.ts >= request.startMs - 1 && candle.ts <= request.endMs);
     },
   };
 }

@@ -14,6 +14,9 @@ export type CourtPrecedent = {
   status: PanelStatus;
   verdict: "APPROVE" | "REJECT" | null;
   dissentingJudgeIds: JudgeId[];
+  // What the market did afterwards, once resolved; the lesson a precedent carries.
+  outcome?: "CONFIRMED" | "REFUTED" | "INCONCLUSIVE" | null | undefined;
+  realizedReturnPct?: number | null | undefined;
 };
 
 export type PrecedentQuery = {

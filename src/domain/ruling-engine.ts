@@ -113,39 +113,76 @@ export function buildRulingReport(rawInput: BuildRulingInput): RulingReport {
       reasonCode: ballot.reasonCode,
       rationale: ballot.rationale,
       evidenceIds: ballot.evidenceIds,
+      alternativeVote: ballot.alternativeVote ?? null,
     };
   });
 
   const judges: RulingReport["judges"] = [opinions[0]!, opinions[1]!, opinions[2]!];
-  const supportsSubmittedRoute = status === "SUPPORTED" && input.advisory?.recommendation === "APPROVE"
-    && input.advisory.marketBias !== "NEUTRAL";
-  const supportsAlternativeRoute = status === "OPPOSED" && input.advisory?.alternativeRoute.direction !== "NEUTRAL";
-  const recommendation = supportsSubmittedRoute
+  const advisory = input.advisory;
+  const alternativeOffered = Boolean(advisory && advisory.alternativeRoute.direction !== "NEUTRAL");
+  const alternativeTally = alternativeOffered
     ? {
-      status: "ACTIONABLE" as const,
-      direction: input.advisory!.marketBias,
-      timing: input.advisory!.entryWindow,
-      rationale: input.advisory!.thesis,
-      conditions: input.advisory!.entryConditions,
-      invalidation: input.advisory!.invalidation,
+      approve: successfulBallots.filter((ballot) => ballot.alternativeVote === "APPROVE").length,
+      reject: successfulBallots.filter((ballot) => ballot.alternativeVote === "REJECT").length,
+      abstain: successfulBallots.filter((ballot) => ballot.alternativeVote === "ABSTAIN").length,
+    }
+    : null;
+  // A missing risk check (legacy callers) does not block; a present one must
+  // show levels on the correct side of entry before anything is actionable.
+  const primaryLevelsOk = input.riskCheck ? input.riskCheck.primary.levelsValid : true;
+  const alternativeLevelsOk = input.riskCheck ? Boolean(input.riskCheck.alternative?.levelsValid) : true;
+
+  const supportsSubmittedRoute = status === "SUPPORTED" && advisory?.recommendation === "APPROVE"
+    && advisory.marketBias !== "NEUTRAL" && primaryLevelsOk;
+  // The alternative is only court-backed when a majority of judges voted for it
+  // separately. It is never promoted just because the thesis was rejected.
+  const supportsAlternativeRoute = status === "OPPOSED" && alternativeOffered
+    && (alternativeTally?.approve ?? 0) >= 2 && alternativeLevelsOk;
+  const recommendation: RulingReport["recommendation"] = supportsSubmittedRoute
+    ? {
+      status: "ACTIONABLE",
+      direction: advisory!.marketBias,
+      source: "SUBMITTED",
+      entryPrice: advisory!.entryPrice ?? null,
+      stopPrice: advisory!.stopPrice ?? null,
+      targetPrice: advisory!.targetPrice ?? null,
+      rewardRisk: input.riskCheck?.primary.rewardRisk ?? null,
+      timing: advisory!.entryWindow,
+      rationale: advisory!.thesis,
+      conditions: advisory!.entryConditions,
+      invalidation: advisory!.invalidation,
       disclaimer: "Advisory guidance only. Confirm conditions at execution time; Cerebra never places an order.",
     }
     : supportsAlternativeRoute
     ? {
-      status: "ACTIONABLE" as const,
-      direction: input.advisory!.alternativeRoute.direction,
-      timing: input.advisory!.alternativeRoute.timing,
-      rationale: input.advisory!.alternativeRoute.rationale,
-      conditions: input.advisory!.alternativeRoute.conditions,
-      invalidation: input.advisory!.alternativeRoute.invalidation,
-      disclaimer: "This is the evidence-bound alternative to the rejected thesis, not an automated order. Confirm conditions at execution time.",
+      status: "ACTIONABLE",
+      direction: advisory!.alternativeRoute.direction,
+      source: "ALTERNATIVE",
+      entryPrice: advisory!.alternativeRoute.entryPrice ?? null,
+      stopPrice: advisory!.alternativeRoute.stopPrice ?? null,
+      targetPrice: advisory!.alternativeRoute.targetPrice ?? null,
+      rewardRisk: input.riskCheck?.alternative?.rewardRisk ?? null,
+      timing: advisory!.alternativeRoute.timing,
+      rationale: advisory!.alternativeRoute.rationale,
+      conditions: advisory!.alternativeRoute.conditions,
+      invalidation: advisory!.alternativeRoute.invalidation,
+      disclaimer: "The submitted thesis was rejected; a majority of judges separately approved this alternative. Advisory only, never an automated order.",
     }
     : {
-      status: status === "OPPOSED" || status === "INVALID" ? "NO_TRADE" as const : "WAIT" as const,
-      direction: "NEUTRAL" as const,
+      status: status === "OPPOSED" || status === "INVALID" ? "NO_TRADE" : "WAIT",
+      direction: "NEUTRAL",
+      source: "NONE",
+      entryPrice: null,
+      stopPrice: null,
+      targetPrice: null,
+      rewardRisk: null,
       timing: "Do not open a position from this ruling.",
       rationale: status === "OPPOSED"
-        ? "The court did not support the proposed thesis."
+        ? alternativeOffered
+          ? "The court rejected the submitted thesis and did not give the alternative route a majority either."
+          : "The court did not support the proposed thesis."
+        : status === "SUPPORTED"
+        ? "The judges supported the thesis, but the plan lacks valid entry, stop and target levels, so it is not actionable yet."
         : "The court does not have a reliable majority basis for a directional recommendation.",
       conditions: ["Gather or refresh the missing evidence, then convene a new court."],
       invalidation: "Any prior thesis is invalid until a new evidence-bound ruling is issued.",
@@ -165,7 +202,8 @@ export function buildRulingReport(rawInput: BuildRulingInput): RulingReport {
       .map((opinion) => opinion.judgeId),
     evidence: input.evidence,
     policyGate: input.policyGate,
-    integrity: { inputHash: input.inputHash, errors },
+    integrity: { inputHash: input.inputHash, errors, warnings: input.warnings ?? [] },
     recommendation,
+    alternativeTally,
   };
 }

@@ -10,10 +10,10 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { BrandMark, CourtProgress, type CourtSubStage, Dissent, JudgeCard } from '@/components/court-panel';
-import { cerebraApi, getSessionAgentKey, shortDate, type CaseRecord, type CourtJob, type CourtRunRecord, type CourtRunResult, type RunPhase } from '@/lib/cerebra';
+import { cerebraApi, getSessionAgentKey, shortDate, type CaseRecord, type CourtJob, type CourtRunRecord, type CourtRunResult, type Direction, type RulingReport, type RunPhase } from '@/lib/cerebra';
 
 const agentGuideSnippets = {
-  http: 'POST ${CEREBRA_API_URL}/v1/cases\nAuthorization: Bearer <agent-api-key>\n{\n  "proposal": {\n    "asset": "TSLAUSDT",\n    "market": "usdt-futures",\n    "timeframe": "4h",\n    "summary": "Evaluate a provisional TSLA long thesis."\n  },\n  "riskLevel": "MEDIUM",\n  "evidenceMode": "BITGET"\n}\n\nPOST /v1/cases/{caseId}/jobs\nGET  /v1/jobs/{jobId}\nGET  /v1/runs/{runId}/report',
+  http: 'POST ${CEREBRA_API_URL}/v1/cases\nAuthorization: Bearer <agent-api-key>\n{\n  "proposal": {\n    "asset": "TSLAUSDT",\n    "market": "usdt-futures",\n    "timeframe": "4h",\n    "direction": "LONG",\n    "summary": "Evaluate a provisional TSLA long thesis."\n  },\n  "riskLevel": "MEDIUM",\n  "evidenceMode": "BITGET"\n}\n\nPOST /v1/cases/{caseId}/jobs\nGET  /v1/jobs/{jobId}\nGET  /v1/runs/{runId}/report',
   mcp: '{\n  "mcpServers": {\n    "cerebra": {\n      "url": "${CEREBRA_API_URL}/mcp",\n      "headers": { "Authorization": "Bearer <agent-api-key>" }\n    }\n  }\n}\n\nWorkflow tools:\n- cerebra_create_case\n- cerebra_enqueue_court\n- cerebra_get_job\n- cerebra_get_report\n- cerebra_save_strategy\n- cerebra_recall_memory\n- cerebra_save_checkpoint',
   browser: 'Tool: create_cerebra_case_and_run_court\n\nInput:\n  asset (U.S. stock) · timeframe\n  riskLevel · summary\n\nReturns:\n  runId · verdict · status\n  dissentingJudgeIds',
 } as const;
@@ -22,8 +22,34 @@ type CourtInput = {
   asset: string;
   timeframe: string;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  direction?: Direction;
   summary: string;
 };
+
+const directionLabels: Record<Direction, string> = { LONG: 'Long', SHORT: 'Short', EITHER: 'Let the court decide' };
+
+function formatPrice(value: number | null | undefined) {
+  return value === null || value === undefined ? '—' : value.toLocaleString('en-US', { maximumFractionDigits: 4 });
+}
+
+// One sentence that makes the headline vote and the advisory impossible to misread.
+function advisorySource(report: RulingReport) {
+  const alt = report.alternativeTally;
+  if (report.recommendation.source === 'ALTERNATIVE') {
+    return `The submitted thesis was rejected. Judges separately backed the ${report.recommendation.direction.toLowerCase()} alternative (${alt?.approve ?? 0} of 3).`;
+  }
+  if (report.recommendation.source === 'SUBMITTED') return 'The court backed the submitted thesis.';
+  if (alt) return `No trade: the thesis was rejected and the alternative route won ${alt.approve} of 3 judge votes.`;
+  return report.status === 'SUPPORTED' ? 'Supported, but not yet actionable.' : 'No position is backed by this ruling.';
+}
+
+function learningLine(report: RulingReport) {
+  const learning = report.learning;
+  if (!learning) return 'Learning loop: no track record was available for this ruling.';
+  if (learning.resolvedOutcomes === 0) return 'Learning loop: no outcomes resolved yet. Cerebra checks each ruling against the market once its horizon passes.';
+  const scope = learning.scope === 'AGENT' ? "your agent's" : "the court's";
+  return `Learning loop: calibrated on ${scope} ${learning.resolvedOutcomes} resolved outcome${learning.resolvedOutcomes === 1 ? '' : 's'} (${learning.confirmed} confirmed, ${learning.refuted} refuted).`;
+}
 
 // Cerebra is a U.S. stock desk: every symbol here is a tokenized U.S. equity on
 // Bitget's usdt-futures market—there is no crypto-pair option.
@@ -66,6 +92,7 @@ export default function Home() {
   const [asset, setAsset] = useState<string>(stockPairs[0].value);
   const [timeframe, setTimeframe] = useState('4h');
   const [riskLevel, setRiskLevel] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
+  const [direction, setDirection] = useState<Direction>('EITHER');
   const [summary, setSummary] = useState('');
   const [phase, setPhase] = useState<RunPhase>('IDLE');
   const [result, setResult] = useState<CourtRunResult | null>(null);
@@ -133,6 +160,7 @@ export default function Home() {
           asset: { type: 'string', description: 'Tokenized U.S. stock symbol such as TSLAUSDT.' },
           timeframe: { type: 'string', enum: ['15m', '1h', '4h', '1d'] },
           riskLevel: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+          direction: { type: 'string', enum: ['LONG', 'SHORT', 'EITHER'], description: 'Side to judge; EITHER lets the court pick the side the data supports.' },
           summary: { type: 'string', minLength: 10, description: 'The decision thesis to put before the court.' },
         },
         required: ['asset', 'timeframe', 'riskLevel', 'summary'],
@@ -148,6 +176,9 @@ export default function Home() {
         if (!['15m', '1h', '4h', '1d'].includes(String(candidate.timeframe)) || !['LOW', 'MEDIUM', 'HIGH'].includes(String(candidate.riskLevel))) {
           throw new Error('timeframe or riskLevel is invalid.');
         }
+        if (candidate.direction !== undefined && !['LONG', 'SHORT', 'EITHER'].includes(String(candidate.direction))) {
+          throw new Error('direction must be LONG, SHORT or EITHER.');
+        }
         const run = await executeCourt(candidate as unknown as CourtInput);
         return { runId: run.runId, verdict: run.report.verdict, status: run.report.status, dissentingJudgeIds: run.report.dissentingJudgeIds };
       },
@@ -159,6 +190,7 @@ export default function Home() {
     setAsset(input.asset.toUpperCase());
     setTimeframe(input.timeframe);
     setRiskLevel(input.riskLevel);
+    setDirection(input.direction ?? 'EITHER');
     setSummary(input.summary);
     setError(null);
     setPhase('COLLECTING');
@@ -166,7 +198,7 @@ export default function Home() {
       const created = await cerebraApi<CaseRecord>('/v1/cases', {
         method: 'POST',
         body: JSON.stringify({
-          proposal: { asset: input.asset.trim().toUpperCase(), market: STOCK_MARKET, timeframe: input.timeframe, summary: input.summary.trim() },
+          proposal: { asset: input.asset.trim().toUpperCase(), market: STOCK_MARKET, timeframe: input.timeframe, direction: input.direction ?? 'EITHER', summary: input.summary.trim() },
           riskLevel: input.riskLevel,
           evidenceMode: 'BITGET',
         }),
@@ -221,7 +253,7 @@ export default function Home() {
     event.preventDefault();
     if (summary.trim().length < 10 || !asset.trim()) return;
     try {
-      await executeCourt({ asset, timeframe, riskLevel, summary });
+      await executeCourt({ asset, timeframe, riskLevel, direction, summary });
     } catch {
       // executeCourt already records the failure via setError; nothing further to do here.
     }
@@ -507,7 +539,8 @@ export default function Home() {
               <label className="field" htmlFor="case-asset"><span>01 / U.S. stock</span><NativeSelect id="case-asset" className="w-full" value={asset} onChange={(event) => setAsset(event.target.value)}>{stockPairs.map((item) => <NativeSelectOption key={item.value} value={item.value}>{item.label}</NativeSelectOption>)}</NativeSelect></label>
               <label className="field" htmlFor="case-timeframe"><span>02 / Horizon</span><NativeSelect id="case-timeframe" className="w-full" value={timeframe} onChange={(event) => setTimeframe(event.target.value)}><NativeSelectOption value="15m">15 minutes</NativeSelectOption><NativeSelectOption value="1h">1 hour</NativeSelectOption><NativeSelectOption value="4h">4 hours</NativeSelectOption><NativeSelectOption value="1d">1 day</NativeSelectOption></NativeSelect></label>
               <label className="field" htmlFor="case-risk"><span>03 / Risk posture</span><NativeSelect id="case-risk" className="w-full" value={riskLevel} onChange={(event) => setRiskLevel(event.target.value as typeof riskLevel)}><NativeSelectOption value="LOW">Low</NativeSelectOption><NativeSelectOption value="MEDIUM">Medium</NativeSelectOption><NativeSelectOption value="HIGH">High</NativeSelectOption></NativeSelect></label>
-              <label className="field field-thesis" htmlFor="case-summary"><span>04 / Thesis to test</span><Textarea id="case-summary" value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="State the thesis, catalyst, and what you want the court to challenge." minLength={10} maxLength={4000} required /></label>
+              <label className="field" htmlFor="case-direction"><span>04 / Side</span><NativeSelect id="case-direction" className="w-full" value={direction} onChange={(event) => setDirection(event.target.value as Direction)}>{(Object.keys(directionLabels) as Direction[]).map((side) => <NativeSelectOption key={side} value={side}>{directionLabels[side]}</NativeSelectOption>)}</NativeSelect></label>
+              <label className="field field-thesis" htmlFor="case-summary"><span>05 / Thesis to test</span><Textarea id="case-summary" value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="State the thesis, catalyst, and what you want the court to challenge." minLength={10} maxLength={4000} required /></label>
             </div>
             <div className="machine-submit">
               <div className="evidence-source"><Radio /><span><strong>Live court ready</strong><small>Bitget evidence · five-agent court · no order execution</small></span></div>
@@ -534,9 +567,17 @@ export default function Home() {
           </div>
           <section className={`recommendation-card recommendation-${result.report.recommendation.status.toLowerCase()}`} aria-label="Advisory recommendation">
             <div className="recommendation-card__head"><span>COURT ADVISORY</span><strong>{result.report.recommendation.status.replace('_', ' ')}</strong></div>
-            <div className="recommendation-card__direction"><span>CONSIDER</span><h3>{result.report.recommendation.direction}</h3><p>{result.report.recommendation.timing}</p></div>
+            <p className="recommendation-card__source">{advisorySource(result.report)}</p>
+            <div className="recommendation-card__direction"><span>{result.report.recommendation.status === 'ACTIONABLE' ? 'CONSIDER' : 'POSITION'}</span><h3>{result.report.recommendation.status === 'ACTIONABLE' ? result.report.recommendation.direction : 'NONE'}</h3><p>{result.report.recommendation.timing}</p></div>
+            {result.report.recommendation.status === 'ACTIONABLE' && result.report.recommendation.entryPrice != null ? <dl className="trade-plan">
+              <div><dt>Entry</dt><dd>{formatPrice(result.report.recommendation.entryPrice)}</dd></div>
+              <div><dt>Stop</dt><dd>{formatPrice(result.report.recommendation.stopPrice)}</dd></div>
+              <div><dt>Target</dt><dd>{formatPrice(result.report.recommendation.targetPrice)}</dd></div>
+              <div><dt>Reward / risk</dt><dd>{result.report.recommendation.rewardRisk ?? '—'}</dd></div>
+            </dl> : null}
             <div className="recommendation-card__body"><p>{result.report.recommendation.rationale}</p><div><strong>Before acting</strong><ul>{result.report.recommendation.conditions.map((condition) => <li key={condition}>{condition}</li>)}</ul></div><div><strong>Invalidation</strong><p>{result.report.recommendation.invalidation}</p></div></div>
             <small>{result.report.recommendation.disclaimer}</small>
+            <p className="learning-line">{learningLine(result.report)}</p>
           </section>
           <div className="proceeding-heading">
             <div><p className="eyebrow">Full proceeding record</p><h3>Intelligence. Argument. Cross-examination.</h3></div>

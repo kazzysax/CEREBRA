@@ -15,7 +15,13 @@ export function renderRulingMarkdown(report: RulingReport): string {
     "## Advisory recommendation",
     "",
     "- Status: " + report.recommendation.status,
-    "- Direction: " + report.recommendation.direction,
+    "- Direction: " + report.recommendation.direction +
+      (report.recommendation.source === "ALTERNATIVE" ? " (court-approved alternative to the rejected thesis)" : ""),
+    ...(report.recommendation.entryPrice != null
+      ? ["- Plan: entry " + report.recommendation.entryPrice + " / stop " + report.recommendation.stopPrice +
+        " / target " + report.recommendation.targetPrice +
+        (report.recommendation.rewardRisk != null ? " (reward/risk " + report.recommendation.rewardRisk + ")" : "")]
+      : []),
     "- Timing: " + report.recommendation.timing,
     "- Conditions: " + report.recommendation.conditions.join("; "),
     "- Invalidation: " + report.recommendation.invalidation,
@@ -51,6 +57,20 @@ export function renderRulingMarkdown(report: RulingReport): string {
     for (const dissent of dissents) {
       lines.push("- **" + dissent.judgeId + ":** " + dissent.rationale);
     }
+  }
+
+  if (report.alternativeTally) {
+    lines.push(
+      "",
+      "## Alternative route ballot",
+      "",
+      report.alternativeTally.approve + " approve / " + report.alternativeTally.reject + " reject / " +
+        report.alternativeTally.abstain + " abstain",
+    );
+  }
+
+  if (report.integrity.warnings?.length) {
+    lines.push("", "## Integrity warnings", "", ...report.integrity.warnings.map((warning) => "- " + warning));
   }
 
   if (report.integrity.errors.length > 0) {

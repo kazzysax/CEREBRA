@@ -4,8 +4,9 @@ export type Evidence = { id: string; title: string; source: string; observedAt: 
 export type JudgeOpinion = {
   judgeId: string; lens: 'RISK' | 'EVIDENCE' | 'STRATEGY'; opinionType: OpinionType;
   vote: Vote | null; confidence: number | null; reasonCode: string | null;
-  rationale: string; evidenceIds: string[];
+  rationale: string; evidenceIds: string[]; alternativeVote?: Vote | null;
 };
+export type Direction = 'LONG' | 'SHORT' | 'EITHER';
 export type RulingReport = {
   reportId: string; generatedAt: string;
   proposal: { id: string; summary: string; hash: string };
@@ -16,13 +17,18 @@ export type RulingReport = {
   recommendation: {
     status: 'ACTIONABLE' | 'WAIT' | 'NO_TRADE'; direction: 'LONG' | 'SHORT' | 'NEUTRAL'; timing: string;
     rationale: string; conditions: string[]; invalidation: string; disclaimer: string;
+    source?: 'SUBMITTED' | 'ALTERNATIVE' | 'NONE';
+    entryPrice?: number | null; stopPrice?: number | null; targetPrice?: number | null; rewardRisk?: number | null;
   };
+  alternativeTally?: { approve: number; reject: number; abstain: number } | null;
+  learning?: { scope: 'AGENT' | 'COURT'; resolvedOutcomes: number; confirmed: number; refuted: number; sameAssetPrecedents: number } | null;
+  integrity?: { errors: string[]; warnings?: string[] };
 };
 export type CourtRunResult = {
   runId: string; startedAt: string; completedAt: string;
   provider: string; model: string;
   analystCase: {
-    recommendation: 'APPROVE' | 'REJECT'; confidence: number; thesis: string;
+    recommendation: 'APPROVE' | 'REJECT'; marketBias?: 'LONG' | 'SHORT' | 'NEUTRAL'; confidence: number; thesis: string;
     keyClaims: Array<{ claim: string; evidenceIds: string[] }>; risks: string[];
   };
   challenge: {
@@ -42,7 +48,7 @@ export type CaseRecord = {
   id: string; evidenceMode: 'BITGET' | 'MANUAL';
   status: 'READY' | 'RUNNING' | 'COMPLETED' | 'FAILED'; createdAt: string;
   submission: {
-    proposal: { id?: string; asset: string; market: string; timeframe: string; summary: string };
+    proposal: { id?: string; asset: string; market: string; timeframe: string; direction?: Direction; summary: string };
     riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; evidence: Evidence[];
   };
 };

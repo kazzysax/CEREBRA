@@ -24,6 +24,7 @@ import { registerJobRoutes } from "./jobs/register-routes.js";
 import { createCourtJobWorker } from "./jobs/worker.js";
 import { registerOutcomeRoutes } from "./outcomes/register-routes.js";
 import { createAnonymousRateLimit } from "./security/anonymous-rate-limit.js";
+import { createOutcomeResolverLoop } from "./outcomes/auto-resolver.js";
 
 export async function buildApp(options: {
   host?: string | undefined;
@@ -39,6 +40,7 @@ export async function buildApp(options: {
     pollIntervalMs?: number | undefined;
     leaseMs?: number | undefined;
     maxAttempts?: number | undefined;
+    outcomeSweepMs?: number | undefined;
   } | undefined;
   anonymousRateLimit?: {
     windowMs?: number | undefined;
@@ -86,7 +88,15 @@ export async function buildApp(options: {
     leaseMs: options.jobs?.leaseMs,
   });
 
+  const outcomeResolver = createOutcomeResolverLoop({
+    repository,
+    evidenceProvider,
+    intervalMs: options.jobs?.outcomeSweepMs,
+    log: (message, detail) => app.log.warn({ detail }, message),
+  });
+
   app.addHook("onClose", async () => {
+    await outcomeResolver.stop();
     await jobWorker.stop();
     await Promise.all([repository.close(), identityRepository.close(), memoryRepository.close(), jobRepository.close()]);
   });
@@ -95,7 +105,7 @@ export async function buildApp(options: {
   app.get("/health/ready", async () => ({ status: "ready" }));
   app.get("/v1/meta", async () => ({
     name: "cerebra",
-    version: "0.6.0",
+    version: "0.7.0",
     courtProvider: {
       name: courtProvider.name,
       model: courtProvider.model,
@@ -121,6 +131,16 @@ export async function buildApp(options: {
     maxAttempts: options.jobs?.maxAttempts,
   });
   registerOutcomeRoutes(app, { repository, auth });
+  // Public, aggregate-only view of the learning loop: how often the court has
+  // been right on resolved outcomes. No case content or owners are exposed.
+  app.get("/v1/court/learning", async () => {
+    const judges = await repository.getJudgeCalibration(null);
+    return {
+      scope: "COURT",
+      outcomeResolution: options.jobs?.enabled ? "automatic" : "agent-reported only",
+      judges,
+    };
+  });
   app.post("/v1/court/runs", async (request, reply) => {
     const agent = await resolveAgent(request, reply, auth);
     if (agent === undefined) return;
@@ -155,7 +175,10 @@ export async function buildApp(options: {
     ));
   });
 
-  if (options.jobs?.enabled) jobWorker.start();
+  if (options.jobs?.enabled) {
+    jobWorker.start();
+    outcomeResolver.start();
+  }
 
   return app;
 }

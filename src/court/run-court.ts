@@ -17,8 +17,10 @@ import {
 import { buildRulingReport } from "../domain/ruling-engine.js";
 import type { JudgeCalibration } from "../outcomes/contracts.js";
 import { calibrateConfidence, type CalibrationAdjustment } from "./calibration.js";
-import { advisoryDoctrineV1, type CourtDoctrine } from "./doctrine.js";
+import { advisoryDoctrineV2, type CourtDoctrine } from "./doctrine.js";
 import type { CourtPrecedent } from "./precedent.js";
+import { computeRiskCheck, type RiskCheck } from "./risk-check.js";
+import type { TrackRecord } from "./track-record.js";
 
 export type CourtTraceEntry = {
   stage: "ANALYST" | "CHALLENGER" | "JUDGE";
@@ -42,6 +44,7 @@ export type CourtRunResult = {
   report: RulingReport;
   trace: CourtTraceEntry[];
   precedents: CourtPrecedent[];
+  riskCheck?: RiskCheck | undefined;
 };
 
 type RunCourtOptions = {
@@ -50,6 +53,7 @@ type RunCourtOptions = {
   doctrine?: CourtDoctrine | undefined;
   precedents?: CourtPrecedent[] | undefined;
   calibration?: JudgeCalibration[] | undefined;
+  trackRecord?: TrackRecord | null | undefined;
 };
 
 const emptyUsage: ModelUsage = {
@@ -105,22 +109,76 @@ function failureCode(error: unknown): "TIMEOUT" | "MODEL_ERROR" {
   return "MODEL_ERROR";
 }
 
-// A stage citing an unknown evidence ID is a real integrity problem, but not
-// one that should abort the whole proceeding: the judges already degrade the
-// same failure mode gracefully (report marked INVALID, verdict withheld)
-// rather than throwing. Collecting these instead of throwing keeps that
-// behavior consistent across every stage and avoids burning a full retry
-// (all downstream model calls) over what is usually a citation-formatting slip.
-function collectUnknownCitations(
+// A stage citing an unknown evidence ID used to void the whole ruling, and
+// that happened on roughly one live run in five over formatting slips. The
+// citation is now stripped and recorded as a warning: the ruling stays valid,
+// the slip stays auditable.
+function knownOnly(
   submission: CaseSubmission,
   stage: string,
   evidenceIds: readonly string[],
+  warnings: string[],
 ): string[] {
   const knownIds = new Set(submission.evidence.map((item) => item.id));
   const unknownIds = evidenceIds.filter((id) => !knownIds.has(id));
-  return unknownIds.length > 0
-    ? [stage + " cited unknown evidence: " + unknownIds.join(", ")]
-    : [];
+  if (unknownIds.length > 0) warnings.push(stage + " cited unknown evidence (removed): " + unknownIds.join(", ").slice(0, 300));
+  return evidenceIds.filter((id) => knownIds.has(id));
+}
+
+// Keep the Analyst's recommendation, bias and levels mutually consistent. Live
+// runs produced APPROVE with a NEUTRAL bias (never actionable) and approvals of
+// the opposite side from the one the agent asked about.
+function coherentAnalystCase(submission: CaseSubmission, analyst: AnalystCase): AnalystCase {
+  const requested = submission.proposal.direction;
+  const clearLevels = { entryPrice: null, stopPrice: null, targetPrice: null };
+  if (requested !== "EITHER" && analyst.marketBias !== requested) {
+    const opposite = analyst.marketBias !== "NEUTRAL";
+    return {
+      ...analyst,
+      recommendation: "REJECT",
+      marketBias: requested,
+      ...clearLevels,
+      alternativeRoute: opposite && analyst.alternativeRoute.direction === "NEUTRAL"
+        ? {
+          direction: analyst.marketBias,
+          entryPrice: analyst.entryPrice,
+          stopPrice: analyst.stopPrice,
+          targetPrice: analyst.targetPrice,
+          timing: analyst.entryWindow,
+          rationale: analyst.thesis,
+          conditions: analyst.entryConditions,
+          invalidation: analyst.invalidation,
+        }
+        : analyst.alternativeRoute,
+    };
+  }
+  // With no side requested, a side the Analyst argues for belongs in the primary
+  // plan (seen live: the model parked its SHORT in the alternative slot and left
+  // the primary NEUTRAL, so the judges never voted on it as the recommendation).
+  if (requested === "EITHER" && analyst.marketBias === "NEUTRAL" && analyst.alternativeRoute.direction !== "NEUTRAL") {
+    const route = analyst.alternativeRoute;
+    return {
+      ...analyst,
+      recommendation: "APPROVE",
+      marketBias: route.direction,
+      entryPrice: route.entryPrice,
+      stopPrice: route.stopPrice,
+      targetPrice: route.targetPrice,
+      entryWindow: route.timing,
+      entryConditions: route.conditions,
+      invalidation: route.invalidation,
+      thesis: route.rationale,
+      alternativeRoute: {
+        direction: "NEUTRAL", entryPrice: null, stopPrice: null, targetPrice: null,
+        timing: "No alternative route.", rationale: "The supported side is the primary plan.",
+        conditions: ["Re-run the court on new evidence."], invalidation: "Not applicable.",
+      },
+    };
+  }
+  if (analyst.recommendation === "APPROVE" && analyst.marketBias === "NEUTRAL") {
+    return { ...analyst, recommendation: "REJECT", ...clearLevels };
+  }
+  return analyst;
 }
 
 export async function runCourt(
@@ -131,7 +189,7 @@ export async function runCourt(
   const submission = caseSubmissionSchema.parse(rawSubmission);
   const now = options.now ?? (() => new Date());
   const idFactory = options.idFactory ?? randomUUID;
-  const doctrine = options.doctrine ?? advisoryDoctrineV1;
+  const doctrine = options.doctrine ?? advisoryDoctrineV2;
   const precedents = options.precedents ?? [];
   const calibrationByJudge = new Map(
     (options.calibration ?? []).map((entry) => [entry.judgeId, entry] as const),
@@ -139,40 +197,49 @@ export async function runCourt(
   const runId = idFactory();
   const startedAt = now().toISOString();
   const trace: CourtTraceEntry[] = [];
-  const priorErrors: string[] = [];
+  const warnings: string[] = [];
+  const trackRecord = options.trackRecord ?? null;
 
-  const analystCall = await provider.runAnalyst({ submission, precedents });
+  const analystCall = await provider.runAnalyst({ submission, precedents, trackRecord });
   trace.push(successfulTrace("ANALYST", null, analystCall));
-  priorErrors.push(...collectUnknownCitations(
-    submission,
-    "Analyst",
-    analystCall.output.keyClaims.flatMap((claim) => claim.evidenceIds),
-  ));
+  const analystCase = coherentAnalystCase(submission, {
+    ...analystCall.output,
+    keyClaims: analystCall.output.keyClaims.map((claim) => ({
+      ...claim,
+      evidenceIds: knownOnly(submission, "Analyst", claim.evidenceIds, warnings),
+    })),
+  });
+  const riskCheck = computeRiskCheck(submission, analystCase);
 
   const challengerCall = await provider.runChallenger({
     submission,
-    analystCase: analystCall.output,
+    analystCase,
     precedents,
+    riskCheck,
   });
   trace.push(successfulTrace("CHALLENGER", null, challengerCall));
-  priorErrors.push(...collectUnknownCitations(
-    submission,
-    "Challenger",
-    challengerCall.output.objections.flatMap((objection) => objection.evidenceIds),
-  ));
+  const challenge: Challenge = {
+    ...challengerCall.output,
+    objections: challengerCall.output.objections.map((objection) => ({
+      ...objection,
+      evidenceIds: knownOnly(submission, "Challenger", objection.evidenceIds, warnings),
+    })),
+  };
 
   const judgeSettlements = await Promise.allSettled(
     courtSeats.map(async (seat) => ({
       seat,
       call: await provider.runJudge({
         submission,
-        analystCase: analystCall.output,
-        challenge: challengerCall.output,
+        analystCase,
+        challenge,
         judgeId: seat.judgeId,
         lens: seat.lens,
         doctrine,
         precedents,
         calibration: calibrationByJudge.get(seat.judgeId) ?? null,
+        riskCheck,
+        trackRecord,
       }),
     })),
   );
@@ -198,6 +265,7 @@ export async function runCourt(
           judgeId: seat.judgeId,
           lens: seat.lens,
           ...call.output,
+          evidenceIds: knownOnly(submission, seat.judgeId, call.output.evidenceIds, warnings),
           confidence: adjustment ? adjustment.calibratedConfidence : call.output.confidence,
           rationale,
         },
@@ -244,14 +312,26 @@ export async function runCourt(
     inputHash: digest(submission),
     evidence: submission.evidence,
     responses: judgeResponses,
-    priorErrors,
+    warnings,
+    riskCheck,
     policyGate: {
       passed: true,
       policyHash: digest(policy),
       violations: [],
     },
-    advisory: analystCall.output,
+    advisory: analystCase,
   });
+  report.riskCheck = riskCheck as unknown as Record<string, unknown>;
+  report.learning = trackRecord
+    ? {
+      scope: trackRecord.scope,
+      resolvedOutcomes: trackRecord.resolved,
+      confirmed: trackRecord.confirmed,
+      refuted: trackRecord.refuted,
+      sameAssetPrecedents: trackRecord.sameAsset.length,
+      calibratedJudges: trace.filter((entry) => entry.calibration).map((entry) => entry.judgeId),
+    }
+    : null;
   report.doctrine = {
     id: doctrine.id,
     version: doctrine.version,
@@ -270,10 +350,11 @@ export async function runCourt(
     completedAt,
     provider: provider.name,
     model: provider.model,
-    analystCase: analystCall.output,
-    challenge: challengerCall.output,
+    analystCase,
+    challenge,
     report,
     trace,
     precedents,
+    riskCheck,
   };
 }

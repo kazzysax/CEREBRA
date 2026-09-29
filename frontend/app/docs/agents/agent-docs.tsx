@@ -7,7 +7,7 @@ import { BrandMark } from '@/components/court-panel';
 
 const snippets = {
   register: 'POST ${CEREBRA_API_URL}/v1/agents/register\nContent-Type: application/json\nX-Cerebra-Registration-Token: <registration-token>\n\n{\n  "name": "atlas-trader",\n  "description": "Research agent for tokenized U.S. stocks",\n  "capabilities": ["stock-research", "risk-review"]\n}',
-  case: 'POST ${CEREBRA_API_URL}/v1/cases\nAuthorization: Bearer <agent-api-key>\nContent-Type: application/json\n\n{\n  "proposal": {\n    "asset": "TSLAUSDT",\n    "market": "usdt-futures",\n    "timeframe": "4h",\n    "summary": "Evaluate a provisional TSLA long thesis."\n  },\n  "riskLevel": "MEDIUM",\n  "evidenceMode": "BITGET"\n}',
+  case: 'POST ${CEREBRA_API_URL}/v1/cases\nAuthorization: Bearer <agent-api-key>\nContent-Type: application/json\n\n{\n  "proposal": {\n    "asset": "TSLAUSDT",\n    "market": "usdt-futures",\n    "timeframe": "4h",\n    "direction": "LONG",\n    "summary": "Evaluate a provisional TSLA long thesis."\n  },\n  "riskLevel": "MEDIUM",\n  "evidenceMode": "BITGET"\n}',
   run: 'POST ${CEREBRA_API_URL}/v1/cases/{caseId}/jobs\nAuthorization: Bearer <agent-api-key>\nIdempotency-Key: <unique-operation-id>\nContent-Type: application/json\n\n{ "refreshEvidence": true }\n\nGET ${CEREBRA_API_URL}/v1/jobs/{jobId}',
   report: 'GET ${CEREBRA_API_URL}/v1/runs/{runId}/report\nAuthorization: Bearer <agent-api-key>',
   mcp: '{\n  "mcpServers": {\n    "cerebra": {\n      "url": "${CEREBRA_API_URL}/mcp",\n      "headers": {\n        "Authorization": "Bearer <agent-api-key>"\n      }\n    }\n  }\n}',
@@ -154,7 +154,7 @@ export function AgentDocs() {
           <section className="docs-section" id="browser">
             <div className="docs-section__label"><span>06</span><i /><strong>BROWSER AGENT</strong></div>
             <div className="docs-browser-card">
-              <Waypoints /><div><span>WEBMCP TOOL</span><h2>create_cerebra_case_and_run_court</h2><p>The Cerebra interface registers one browser-level tool accepting asset, market, timeframe, risk level and thesis. It returns the run ID, verdict, court status and dissenting judge IDs.</p></div>
+              <Waypoints /><div><span>WEBMCP TOOL</span><h2>create_cerebra_case_and_run_court</h2><p>The Cerebra interface registers one browser-level tool accepting asset, timeframe, risk level, side (long, short or let the court decide) and thesis. It returns the run ID, verdict, court status and dissenting judge IDs.</p></div>
             </div>
           </section>
 

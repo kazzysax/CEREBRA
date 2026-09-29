@@ -17,7 +17,7 @@ test("persists the case, court run, three opinions, and dissent report", async (
     payload: {
       proposal: {
         asset: "BTCUSDT",
-        market: "spot",
+        market: "usdt-futures",
         timeframe: "4h",
         summary: "Evaluate a provisional BTC long thesis for the next four hours.",
       },
@@ -28,7 +28,9 @@ test("persists the case, court run, three opinions, and dissent report", async (
   assert.equal(createdResponse.statusCode, 201);
   const created = createdResponse.json();
   assert.equal(created.evidenceMode, "BITGET");
-  assert.equal(created.submission.evidence.length, 1);
+  assert.equal(created.submission.evidence.length, 2);
+  assert.equal(created.submission.evidence[0].source, "cerebra-mock-evidence");
+  assert.equal(typeof created.submission.evidence[0].metrics.lastPrice, "number");
 
   const runResponse = await app.inject({
     method: "POST",
@@ -38,7 +40,7 @@ test("persists the case, court run, three opinions, and dissent report", async (
   assert.equal(runResponse.statusCode, 201);
   const run = runResponse.json();
   assert.equal(run.report.judges.length, 3);
-  assert.deepEqual(run.report.dissentingJudgeIds, ["judge-risk"]);
+  assert.ok(run.report.riskCheck, "the report carries the computed risk check");
 
   const storedRunResponse = await app.inject({
     method: "GET",
@@ -53,7 +55,7 @@ test("persists the case, court run, three opinions, and dissent report", async (
   });
   assert.equal(reportResponse.statusCode, 200);
   const storedReport = reportResponse.json();
-  assert.deepEqual(storedReport.report.dissentingJudgeIds, ["judge-risk"]);
+  assert.deepEqual(storedReport.report.dissentingJudgeIds, run.report.dissentingJudgeIds);
   assert.match(storedReport.markdown, /## Dissent/);
   assert.match(storedReport.markdown, /judge-risk/);
 

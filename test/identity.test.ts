@@ -60,7 +60,7 @@ test("rotated keys are invalidated and case data is isolated by agent", async ()
     payload: {
       proposal: {
         asset: "BTCUSDT",
-        market: "spot",
+        market: "usdt-futures",
         timeframe: "4h",
         summary: "Evaluate a bounded BTC allocation using supplied market evidence.",
       },

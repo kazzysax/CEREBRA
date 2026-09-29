@@ -8,6 +8,15 @@ export const createCaseSchema = z.object({
   evidenceMode: z.enum(["BITGET", "MANUAL"]).default("BITGET"),
   evidence: z.array(evidenceReferenceSchema).max(50).default([]),
 }).superRefine((value, context) => {
+  // Cerebra covers tokenized U.S. stocks, which Bitget lists as USDT-margined
+  // futures only; spot is not offered.
+  if (!["usdt-futures", "usdt_futures", "futures", "future", "perp", "perpetual"].includes(value.proposal.market.trim().toLowerCase())) {
+    context.addIssue({
+      code: "custom",
+      path: ["proposal", "market"],
+      message: "Only usdt-futures is supported; tokenized U.S. stocks have no Bitget spot market.",
+    });
+  }
   if (value.evidenceMode === "MANUAL" && value.evidence.length === 0) {
     context.addIssue({
       code: "custom",

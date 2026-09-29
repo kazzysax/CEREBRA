@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildApp } from "../src/app.js";
+import { featureEvidence } from "./fixtures.js";
 
 const registrationToken = "test-registration-token-that-is-long-enough";
 const authOptions = {
@@ -29,20 +30,16 @@ async function createAndRunCase(app: App, apiKey: string, observedAt: string) {
     headers: { authorization: "Bearer " + apiKey },
     payload: {
       proposal: {
-        asset: "BTCUSDT",
-        market: "spot",
+        asset: "TSLAUSDT",
+        market: "usdt-futures",
         timeframe: "4h",
-        summary: "Evaluate a provisional BTC long thesis using manually supplied evidence.",
+        direction: "LONG",
+        summary: "Evaluate a provisional TSLA long thesis using manually supplied evidence.",
       },
       riskLevel: "MEDIUM",
       evidenceMode: "MANUAL",
-      evidence: [{
-        id: "ev-1",
-        title: "BTC market snapshot",
-        source: "feedback-loop-test",
-        observedAt,
-        digest: "sha256:feedback-loop-test",
-      }],
+      // Uptrend, ask-heavy book: risk and evidence judges approve, strategy dissents.
+      evidence: featureEvidence({ trend: "UP", depth: "ASK_HEAVY", observedAt }),
     },
   });
   assert.equal(created.statusCode, 201);
@@ -80,14 +77,14 @@ test("post-trade outcomes feed back into a judge's confidence on the next ruling
 
   // Baseline: with no resolved outcomes yet, the mock judges report their raw confidence untouched.
   const baseline = await createAndRunCase(app, apiKey, "2026-09-20T10:00:00.000Z");
-  const baselineRisk = baseline.report.judges.find((judge) => judge.judgeId === "judge-risk")!;
+  const baselineStrategy = baseline.report.judges.find((judge) => judge.judgeId === "judge-strategy")!;
   const baselineEvidence = baseline.report.judges.find((judge) => judge.judgeId === "judge-evidence")!;
-  assert.equal(baselineRisk.confidence, 0.78);
-  assert.equal(baselineEvidence.confidence, 0.74);
+  assert.equal(baselineStrategy.confidence, 0.64);
+  assert.equal(baselineEvidence.confidence, 0.68);
 
-  // The mock judge-risk always votes REJECT and judge-evidence/judge-strategy always vote APPROVE.
-  // Recording a CONFIRMED outcome after each of three rulings makes judge-risk wrong every time
-  // and the other two judges right every time, giving each judge a real, resolved track record.
+  // On this setup judge-strategy votes REJECT while judge-risk and judge-evidence vote APPROVE.
+  // Recording a CONFIRMED outcome after each of three rulings makes judge-strategy wrong every
+  // time and the other two right every time, giving each judge a real, resolved track record.
   const rulingsToResolve = [
     baseline,
     await createAndRunCase(app, apiKey, "2026-09-20T11:00:00.000Z"),
@@ -106,29 +103,32 @@ test("post-trade outcomes feed back into a judge's confidence on the next ruling
   const judges = calibration.json().judges as Array<
     { judgeId: string; resolved: number; correct: number; incorrect: number; accuracy: number | null }
   >;
-  assert.deepEqual(judges.find((judge) => judge.judgeId === "judge-risk"), {
-    judgeId: "judge-risk", resolved: 3, correct: 0, incorrect: 3, accuracy: 0,
+  assert.deepEqual(judges.find((judge) => judge.judgeId === "judge-strategy"), {
+    judgeId: "judge-strategy", resolved: 3, correct: 0, incorrect: 3, accuracy: 0,
   });
   assert.deepEqual(judges.find((judge) => judge.judgeId === "judge-evidence"), {
     judgeId: "judge-evidence", resolved: 3, correct: 3, incorrect: 0, accuracy: 1,
   });
 
   // A brand-new case for the same agent should now carry that track record into the ruling:
-  // judge-risk's history-blind confidence gets throttled down, judge-evidence's gets pulled up.
+  // judge-strategy's history-blind confidence gets throttled down, judge-evidence's pulled up.
   const calibrated = await createAndRunCase(app, apiKey, "2026-09-20T16:00:00.000Z");
-  const calibratedRisk = calibrated.report.judges.find((judge) => judge.judgeId === "judge-risk")!;
-  const calibratedEvidence = calibrated.report.judges.find((judge) => judge.judgeId === "judge-evidence")!;
   const calibratedStrategy = calibrated.report.judges.find((judge) => judge.judgeId === "judge-strategy")!;
+  const calibratedEvidence = calibrated.report.judges.find((judge) => judge.judgeId === "judge-evidence")!;
 
-  assert.equal(calibratedRisk.confidence, 0.663);
-  assert.ok(calibratedRisk.confidence! < baselineRisk.confidence!);
-  assert.match(calibratedRisk.rationale, /Confidence calibrated from 0\.78 to 0\.663 using 3 resolved outcomes; historical accuracy 0%/);
+  // weight = 0.4 * 3 / (3 + 5) = 0.15
+  assert.equal(calibratedStrategy.confidence, 0.544);
+  assert.ok(calibratedStrategy.confidence! < baselineStrategy.confidence!);
+  assert.match(calibratedStrategy.rationale, /Confidence calibrated from 0\.64 to 0\.544 using 3 resolved outcomes; historical accuracy 0%/);
 
-  assert.equal(calibratedEvidence.confidence, 0.779);
+  assert.equal(calibratedEvidence.confidence, 0.728);
   assert.ok(calibratedEvidence.confidence! > baselineEvidence.confidence!);
   assert.match(calibratedEvidence.rationale, /historical accuracy 100%/);
 
-  assert.equal(calibratedStrategy.confidence, 0.745);
+  // The ruling itself records that it was informed by the agent's own resolved history.
+  const report = (calibrated as unknown as { report: { learning: { scope: string; resolvedOutcomes: number } } }).report;
+  assert.equal(report.learning.scope, "AGENT");
+  assert.equal(report.learning.resolvedOutcomes, 3);
 
   await app.close();
 });

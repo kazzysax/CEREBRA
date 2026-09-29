@@ -16,7 +16,7 @@ test("retrieves only relevant owner-scoped completed rulings as precedents", asy
     updatedAt: "2026-09-19T10:00:00.000Z",
     submission: {
       proposal: {
-        asset: "BTCUSDT", market: "spot", timeframe: "4h",
+        asset: "BTCUSDT", market: "usdt-futures", timeframe: "4h", direction: "LONG",
         summary: "Evaluate a cautious BTC long after confirmation from market evidence.",
       },
       riskLevel: "MEDIUM",
@@ -38,17 +38,31 @@ test("retrieves only relevant owner-scoped completed rulings as precedents", asy
   await repository.completeRun("prior-run", result, "prior ruling");
 
   const precedents = await repository.findPrecedents({
-    agentId: "agent-a", asset: "BTCUSDT", market: "spot", excludeCaseId: "new-btc-case", limit: 5,
+    agentId: "agent-a", asset: "BTCUSDT", market: "usdt-futures", excludeCaseId: "new-btc-case", limit: 5,
   });
   assert.deepEqual(precedents, [{
     caseId: "prior-btc-case", runId: "prior-run", concludedAt: result.completedAt,
-    asset: "BTCUSDT", market: "spot", timeframe: "4h", riskLevel: "MEDIUM",
+    asset: "BTCUSDT", market: "usdt-futures", timeframe: "4h", riskLevel: "MEDIUM",
     proposalSummary: "Evaluate a cautious BTC long after confirmation from market evidence.",
-    status: "SUPPORTED", verdict: "APPROVE", dissentingJudgeIds: ["judge-risk"],
+    // Manual evidence without measured features: the court declines to pick a side.
+    status: "OPPOSED", verdict: "REJECT", dissentingJudgeIds: [],
+    outcome: null, realizedReturnPct: null,
   }]);
 
+  // Once the market resolves the ruling, the precedent carries that lesson forward.
+  await repository.saveOutcome({
+    id: "prior-outcome", runId: "prior-run", agentId: "agent-a", source: "AUTO", horizon: "4h",
+    thesisOutcome: "REFUTED", realizedReturnPct: -1.2, observedAt: "2026-09-19T14:05:00.000Z",
+    recordedAt: "2026-09-19T14:06:00.000Z",
+  });
+  const resolved = await repository.findPrecedents({
+    agentId: "agent-a", asset: "BTCUSDT", market: "usdt-futures", excludeCaseId: "new-btc-case", limit: 5,
+  });
+  assert.equal(resolved[0]?.outcome, "REFUTED");
+  assert.equal(resolved[0]?.realizedReturnPct, -1.2);
+
   const isolated = await repository.findPrecedents({
-    agentId: "agent-b", asset: "BTCUSDT", market: "spot", excludeCaseId: "new-btc-case", limit: 5,
+    agentId: "agent-b", asset: "BTCUSDT", market: "usdt-futures", excludeCaseId: "new-btc-case", limit: 5,
   });
   assert.deepEqual(isolated, []);
   await repository.close();

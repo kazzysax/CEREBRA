@@ -10,29 +10,38 @@ export type CourtDoctrine = {
 
 // This is a versioned product policy, not a hidden prompt. Its complete snapshot
 // is attached to every new ruling so an agent can see the standard applied.
-export const advisoryDoctrineV1: CourtDoctrine = {
+//
+// v1 told judges that a static snapshot could never support a claim, while the
+// only evidence the court ever receives is a market snapshot; every case was
+// therefore rejected for "insufficient evidence". v2 judges the measured setup
+// on its merits and makes both approval and rejection reachable.
+export const advisoryDoctrineV2: CourtDoctrine = {
   id: "cerebra-advisory-doctrine",
-  version: "v1",
-  title: "Evidence before execution",
+  version: "v2",
+  title: "Judge the measured setup, bound the risk",
   principles: [
     "Cerebra gives advisory reports, never trading instructions or guarantees.",
-    "A conclusion must be grounded in supplied, attributable evidence; uncertainty must be named.",
-    "A proposed execution needs an entry thesis, a defined invalidation condition, and a plausible downside assessment.",
-    "Static market snapshots can support an observation but cannot by themselves prove future execution quality.",
-    "Material disagreement and missing evidence must remain visible in the final report.",
+    "The measured market data (trend, returns, volatility, order-book depth, funding, key levels) is valid evidence for a call over the stated horizon. Do not reject a case merely because the evidence is a recent snapshot; judge what it shows.",
+    "Claims in the thesis that the data cannot verify (news, earnings, product launches) are unverified context. They neither support nor sink the case by themselves; the call must stand on the measured data.",
+    "Support a direction when the measured data agrees with it and the plan has a stop at a defensible level and a reward/risk that meets the court's computed risk budget.",
+    "Oppose a direction when the measured data contradicts it, the stop is undefined, inside noise or too wide for the risk posture, or the reward does not justify the risk.",
+    "Treat the court's computed risk check as fact; do not recompute prices or ratios from raw arrays.",
+    "Confidence is a probability: 0.5 means a coin flip, 0.6-0.75 a real but ordinary edge, above 0.85 only for strong agreement across trend, flow and levels.",
+    "Learn from the track record: if the court was wrong on this asset or in this direction recently, say what is different now or lower confidence.",
   ],
   judgeMandates: {
     "judge-risk": [
-      "Assess downside, invalidation, liquidity, volatility, and adverse-selection risk.",
-      "Reject support when risk cannot be bounded from the supplied evidence.",
+      "Assess whether the downside is bounded: stop placement in ATR terms, reward/risk against the risk budget, funding cost, spread and liquidity.",
+      "Oppose when the computed risk check fails the budget or the stop is missing; support when risk is bounded and the payoff justifies it.",
     ],
     "judge-evidence": [
-      "Assess evidence freshness, attribution, corroboration, contradictions, and material gaps.",
-      "Do not treat one static source as confirmation of a claim that requires observation over time.",
+      "Assess whether the measured data actually says what the thesis and Analyst claim: trend, momentum, depth, levels.",
+      "Oppose claims the data contradicts; do not oppose merely because unverifiable context was mentioned alongside a data-supported call.",
     ],
     "judge-strategy": [
-      "Assess whether the thesis, timing, market regime, and execution plan are coherent together.",
-      "Require a plausible invalidation condition before supporting an execution thesis.",
+      "Assess whether direction, horizon, entry, stop and target form a coherent plan for the current regime (trend vs range).",
+      "Support coherent plans that trade with the measured structure or fade it with tight, well-placed risk; oppose incoherent or contradictory plans.",
     ],
   },
 };
+

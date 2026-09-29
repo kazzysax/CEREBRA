@@ -29,6 +29,7 @@ export const judgeBallotSchema = z.object({
   reasonCode: reasonCodeSchema,
   rationale: z.string().trim().min(1).max(2_000),
   evidenceIds: z.array(z.string().trim().min(1)).max(25),
+  alternativeVote: voteSchema.nullable().optional(),
 });
 export type JudgeBallot = z.infer<typeof judgeBallotSchema>;
 
@@ -54,6 +55,9 @@ export const evidenceReferenceSchema = z.object({
   uri: z.string().url().optional(),
   digest: z.string().trim().min(1),
   summary: z.string().trim().min(1).max(8_000).optional(),
+  // Structured, machine-computed values (e.g. market features) kept alongside
+  // the human-readable summary so later stages never re-parse prose.
+  metrics: z.record(z.string(), z.unknown()).optional(),
 });
 export type EvidenceReference = z.infer<typeof evidenceReferenceSchema>;
 
@@ -84,6 +88,7 @@ export const judgeOpinionSchema = z.object({
   reasonCode: reasonCodeSchema.nullable(),
   rationale: z.string().min(1),
   evidenceIds: z.array(z.string()),
+  alternativeVote: voteSchema.nullable().optional(),
 });
 export type JudgeOpinion = z.infer<typeof judgeOpinionSchema>;
 
@@ -115,16 +120,31 @@ export const rulingReportSchema = z.object({
   integrity: z.object({
     inputHash: z.string().min(1),
     errors: z.array(z.string()),
+    // Recoverable problems (e.g. a stripped unknown citation) that no longer
+    // void the whole ruling.
+    warnings: z.array(z.string()).optional(),
   }),
   recommendation: z.object({
     status: z.enum(["ACTIONABLE", "WAIT", "NO_TRADE"]),
     direction: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+    source: z.enum(["SUBMITTED", "ALTERNATIVE", "NONE"]).optional(),
+    entryPrice: z.number().nullable().optional(),
+    stopPrice: z.number().nullable().optional(),
+    targetPrice: z.number().nullable().optional(),
+    rewardRisk: z.number().nullable().optional(),
     timing: z.string().min(1),
     rationale: z.string().min(1),
     conditions: z.array(z.string().min(1)),
     invalidation: z.string().min(1),
     disclaimer: z.string().min(1),
   }),
+  alternativeTally: z.object({
+    approve: z.number().int().nonnegative(),
+    reject: z.number().int().nonnegative(),
+    abstain: z.number().int().nonnegative(),
+  }).nullable().optional(),
+  riskCheck: z.record(z.string(), z.unknown()).nullable().optional(),
+  learning: z.record(z.string(), z.unknown()).nullable().optional(),
   doctrine: z.object({
     id: z.string().min(1),
     version: z.string().min(1),
@@ -151,6 +171,11 @@ export const buildRulingInputSchema = z.object({
   evidence: z.array(evidenceReferenceSchema),
   responses: z.array(judgeResponseSchema),
   priorErrors: z.array(z.string().min(1)).optional(),
+  warnings: z.array(z.string().min(1)).optional(),
+  riskCheck: z.object({
+    primary: z.object({ levelsValid: z.boolean(), rewardRisk: z.number().nullable() }).passthrough(),
+    alternative: z.object({ levelsValid: z.boolean(), rewardRisk: z.number().nullable() }).passthrough().nullable(),
+  }).passthrough().optional(),
   policyGate: z.object({
     passed: z.boolean(),
     policyHash: z.string().min(1),
@@ -159,12 +184,18 @@ export const buildRulingInputSchema = z.object({
   advisory: z.object({
     recommendation: z.enum(["APPROVE", "REJECT"]),
     marketBias: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+    entryPrice: z.number().nullable().optional(),
+    stopPrice: z.number().nullable().optional(),
+    targetPrice: z.number().nullable().optional(),
     entryWindow: z.string().min(1),
     entryConditions: z.array(z.string().min(1)).min(1),
     invalidation: z.string().min(1),
     thesis: z.string().min(1),
     alternativeRoute: z.object({
       direction: z.enum(["LONG", "SHORT", "NEUTRAL"]),
+      entryPrice: z.number().nullable().optional(),
+      stopPrice: z.number().nullable().optional(),
+      targetPrice: z.number().nullable().optional(),
       timing: z.string().min(1),
       rationale: z.string().min(1),
       conditions: z.array(z.string().min(1)).min(1),

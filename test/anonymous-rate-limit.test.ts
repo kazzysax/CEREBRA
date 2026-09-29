@@ -4,7 +4,7 @@ import { buildApp } from "../src/app.js";
 
 const manualEvidenceCase = {
   proposal: {
-    asset: "BTCUSDT", market: "spot", timeframe: "4h",
+    asset: "BTCUSDT", market: "usdt-futures", timeframe: "4h",
     summary: "Rate limit test: evaluate a provisional BTC long thesis.",
   },
   riskLevel: "MEDIUM" as const,

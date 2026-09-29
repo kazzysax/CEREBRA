@@ -6,10 +6,17 @@ import type {
   CourtRunRecord,
   StoredReport,
 } from "./contracts.js";
-import type { JudgeCalibration, OutcomeRecord } from "../outcomes/contracts.js";
+import type { OutcomeRecord } from "../outcomes/contracts.js";
+import { buildTrackRecord, MIN_AGENT_RESOLVED, scoreJudges, type ScoredRun } from "../outcomes/scoring.js";
+import type { ResolvedPrecedent } from "../court/track-record.js";
 
 function clone<T>(value: T): T {
   return structuredClone(value);
+}
+
+// An agent sees only its own records; an anonymous caller (null) only anonymous ones.
+function owns(recordAgentId: string | null | undefined, agentId: string | null | undefined): boolean {
+  return (recordAgentId ?? null) === (agentId ?? null);
 }
 
 export function createMemoryCaseRepository(): CaseRepository {
@@ -17,6 +24,20 @@ export function createMemoryCaseRepository(): CaseRepository {
   const runs = new Map<string, CourtRunRecord>();
   const reports = new Map<string, StoredReport>();
   const outcomes = new Map<string, OutcomeRecord>();
+
+  function latestOutcome(runId: string): OutcomeRecord | undefined {
+    return [...outcomes.values()].filter((item) => item.runId === runId).sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0];
+  }
+
+  // agentId undefined = every resolved outcome (court-wide); otherwise that owner's scope.
+  function scoredRuns(agentId: string | null | undefined): ScoredRun[] {
+    return [...outcomes.values()].flatMap((outcome) => {
+      const run = runs.get(outcome.runId);
+      if (!run?.result) return [];
+      if (agentId !== undefined && !owns(cases.get(run.caseId)?.agentId, agentId)) return [];
+      return [{ thesisOutcome: outcome.thesisOutcome, judges: run.result.report.judges }];
+    });
+  }
 
   return {
     name: "memory",
@@ -29,7 +50,7 @@ export function createMemoryCaseRepository(): CaseRepository {
 
     async listCases(limit, agentId) {
       return [...cases.values()]
-        .filter((record) => !agentId || record.agentId === agentId)
+        .filter((record) => owns(record.agentId, agentId))
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
         .slice(0, limit)
         .map(clone);
@@ -37,7 +58,7 @@ export function createMemoryCaseRepository(): CaseRepository {
 
     async getCase(id, agentId) {
       const record = cases.get(id);
-      return record && (!agentId || record.agentId === agentId) ? clone(record) : null;
+      return record && owns(record.agentId, agentId) ? clone(record) : null;
     },
 
     async replaceEvidence(id, evidence: EvidenceReference[], updatedAt) {
@@ -66,7 +87,7 @@ export function createMemoryCaseRepository(): CaseRepository {
 
     async listRuns(limit, agentId) {
       return [...runs.values()]
-        .filter((run) => !agentId || cases.get(run.caseId)?.agentId === agentId)
+        .filter((run) => owns(cases.get(run.caseId)?.agentId, agentId))
         .sort((left, right) => (right.completedAt ?? right.startedAt).localeCompare(left.completedAt ?? left.startedAt))
         .slice(0, limit)
         .map(clone);
@@ -112,13 +133,13 @@ export function createMemoryCaseRepository(): CaseRepository {
       const record = runs.get(id);
       if (!record) return null;
       const caseRecord = cases.get(record.caseId);
-      return !agentId || caseRecord?.agentId === agentId ? clone(record) : null;
+      return owns(caseRecord?.agentId, agentId) ? clone(record) : null;
     },
 
     async getReport(runId, agentId) {
       const run = runs.get(runId);
       const caseRecord = run ? cases.get(run.caseId) : null;
-      if (agentId && caseRecord?.agentId !== agentId) return null;
+      if (!caseRecord || !owns(caseRecord.agentId, agentId)) return null;
       const report = reports.get(runId);
       return report ? clone(report) : null;
     },
@@ -145,6 +166,8 @@ export function createMemoryCaseRepository(): CaseRepository {
           status: run.result!.report.status,
           verdict: run.result!.report.verdict,
           dissentingJudgeIds: [...run.result!.report.dissentingJudgeIds],
+          outcome: latestOutcome(run.id)?.thesisOutcome ?? null,
+          realizedReturnPct: latestOutcome(run.id)?.realizedReturnPct ?? null,
         }));
     },
 
@@ -157,24 +180,54 @@ export function createMemoryCaseRepository(): CaseRepository {
 
     async listOutcomes(runId, agentId) {
       const run = runs.get(runId); const record = run ? cases.get(run.caseId) : null;
-      if (agentId && record?.agentId !== agentId) return [];
+      if (!record || !owns(record.agentId, agentId)) return [];
       return [...outcomes.values()].filter((item) => item.runId === runId).sort((a, b) => a.observedAt.localeCompare(b.observedAt)).map(clone);
     },
 
     async getJudgeCalibration(agentId) {
-      const stats = new Map(["judge-risk", "judge-evidence", "judge-strategy"].map((judgeId) => [judgeId, { resolved: 0, correct: 0, incorrect: 0 }]));
-      for (const outcome of outcomes.values()) {
-        if (outcome.agentId !== agentId || outcome.thesisOutcome === "INCONCLUSIVE") continue;
-        const run = runs.get(outcome.runId);
-        if (!run?.result) continue;
-        for (const judge of run.result.report.judges) {
-          if (!judge.vote || judge.vote === "ABSTAIN") continue;
-          const stat = stats.get(judge.judgeId)!; stat.resolved += 1;
-          const correct = (judge.vote === "APPROVE" && outcome.thesisOutcome === "CONFIRMED") || (judge.vote === "REJECT" && outcome.thesisOutcome === "REFUTED");
-          if (correct) stat.correct += 1; else stat.incorrect += 1;
-        }
-      }
-      return [...stats.entries()].map(([judgeId, stat]) => ({ judgeId: judgeId as JudgeCalibration["judgeId"], ...stat, accuracy: stat.resolved ? stat.correct / stat.resolved : null }));
+      return scoreJudges(scoredRuns(agentId === null ? undefined : agentId));
+    },
+
+    async getTrackRecord({ agentId, asset }) {
+      const own = scoredRuns(agentId);
+      const useOwn = agentId !== null && own.filter((run) => run.thesisOutcome !== "INCONCLUSIVE").length >= MIN_AGENT_RESOLVED;
+      const sameAsset: ResolvedPrecedent[] = [...outcomes.values()]
+        .map((outcome) => ({ outcome, run: runs.get(outcome.runId) }))
+        .filter(({ run }) => run?.result && owns(cases.get(run.caseId)?.agentId, agentId))
+        .filter(({ run }) => cases.get(run!.caseId)?.submission.proposal.asset === asset)
+        .filter(({ run }) => run!.result!.analystCase.marketBias !== "NEUTRAL")
+        .sort((left, right) => right.outcome.observedAt.localeCompare(left.outcome.observedAt))
+        .map(({ outcome, run }) => ({
+          asset,
+          timeframe: cases.get(run!.caseId)!.submission.proposal.timeframe,
+          direction: run!.result!.analystCase.marketBias as "LONG" | "SHORT",
+          verdict: run!.result!.report.verdict,
+          outcome: outcome.thesisOutcome,
+          realizedReturnPct: outcome.realizedReturnPct ?? null,
+          concludedAt: outcome.observedAt,
+        }));
+      return buildTrackRecord({ scope: useOwn ? "AGENT" : "COURT", scored: useOwn ? own : scoredRuns(undefined), sameAsset });
+    },
+
+    async listRunsAwaitingOutcome(completedBefore, limit) {
+      const resolved = new Set([...outcomes.values()].map((outcome) => outcome.runId));
+      return [...runs.values()]
+        .filter((run) => run.status === "COMPLETED" && run.completedAt && run.completedAt <= completedBefore && !resolved.has(run.id))
+        .sort((left, right) => left.completedAt!.localeCompare(right.completedAt!))
+        .slice(0, limit)
+        .flatMap((run) => {
+          const record = cases.get(run.caseId);
+          if (!record) return [];
+          return [{
+            runId: run.id,
+            agentId: record.agentId,
+            completedAt: run.completedAt!,
+            asset: record.submission.proposal.asset,
+            market: record.submission.proposal.market,
+            timeframe: record.submission.proposal.timeframe,
+            result: clone(run.result),
+          }];
+        });
     },
 
     async close() {},

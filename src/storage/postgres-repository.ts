@@ -9,9 +9,33 @@ import type {
   CourtRunRecord,
   StoredReport,
 } from "./contracts.js";
-import type { JudgeCalibration, OutcomeRecord } from "../outcomes/contracts.js";
+import type { OutcomeRecord } from "../outcomes/contracts.js";
+import { buildTrackRecord, MIN_AGENT_RESOLVED, scoreJudges, type ScoredRun } from "../outcomes/scoring.js";
+import type { ResolvedPrecedent } from "../court/track-record.js";
+import type { CourtPrecedent } from "../court/precedent.js";
 
 type Row = Record<string, unknown>;
+
+function outcomeFromRow(row: Row): OutcomeRecord {
+  return {
+    id: String(row.id),
+    runId: String(row.run_id),
+    agentId: row.agent_id === null || row.agent_id === undefined ? null : String(row.agent_id),
+    source: (row.source as OutcomeRecord["source"]) ?? "AGENT",
+    horizon: row.horizon as OutcomeRecord["horizon"],
+    thesisOutcome: row.thesis_outcome as OutcomeRecord["thesisOutcome"],
+    realizedReturnPct: row.realized_return_pct === null ? undefined : Number(row.realized_return_pct),
+    note: row.note === null ? undefined : String(row.note),
+    observedAt: iso(row.observed_at),
+    recordedAt: iso(row.recorded_at),
+  };
+}
+
+function scoredFromRow(row: Row): ScoredRun | null {
+  const parsed = rulingReportSchema.safeParse(row.report);
+  if (!parsed.success) return null;
+  return { thesisOutcome: row.thesis_outcome as ScoredRun["thesisOutcome"], judges: parsed.data.judges };
+}
 
 function iso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
@@ -119,7 +143,7 @@ export function createPostgresCaseRepository(options: {
     async listCases(limit, agentId) {
       const result = await pool.query(
         `SELECT * FROM cases
-         WHERE ($2::text IS NULL OR agent_id = $2)
+         WHERE agent_id IS NOT DISTINCT FROM $2::text
          ORDER BY created_at DESC LIMIT $1`,
         [limit, agentId ?? null],
       );
@@ -128,7 +152,7 @@ export function createPostgresCaseRepository(options: {
 
     async getCase(id, agentId) {
       const result = await pool.query(
-        "SELECT * FROM cases WHERE id = $1 AND ($2::text IS NULL OR agent_id = $2)",
+        "SELECT * FROM cases WHERE id = $1 AND agent_id IS NOT DISTINCT FROM $2::text",
         [id, agentId ?? null],
       );
       return result.rowCount ? caseFromRow(result.rows[0] as Row) : null;
@@ -175,7 +199,7 @@ export function createPostgresCaseRepository(options: {
       const result = await pool.query(
         `SELECT court_runs.* FROM court_runs
          JOIN cases ON cases.id = court_runs.case_id
-         WHERE ($2::text IS NULL OR cases.agent_id = $2)
+         WHERE cases.agent_id IS NOT DISTINCT FROM $2::text
          ORDER BY COALESCE(court_runs.completed_at, court_runs.started_at) DESC
          LIMIT $1`,
         [limit, agentId ?? null],
@@ -254,7 +278,7 @@ export function createPostgresCaseRepository(options: {
       const result = await pool.query(
         `SELECT court_runs.* FROM court_runs
          JOIN cases ON cases.id = court_runs.case_id
-         WHERE court_runs.id = $1 AND ($2::text IS NULL OR cases.agent_id = $2)`,
+         WHERE court_runs.id = $1 AND cases.agent_id IS NOT DISTINCT FROM $2::text`,
         [id, agentId ?? null],
       );
       return result.rowCount ? runFromRow(result.rows[0] as Row) : null;
@@ -266,7 +290,7 @@ export function createPostgresCaseRepository(options: {
          FROM ruling_reports
          JOIN court_runs ON court_runs.id = ruling_reports.run_id
          JOIN cases ON cases.id = court_runs.case_id
-         WHERE ruling_reports.run_id = $1 AND ($2::text IS NULL OR cases.agent_id = $2)`,
+         WHERE ruling_reports.run_id = $1 AND cases.agent_id IS NOT DISTINCT FROM $2::text`,
         [runId, agentId ?? null],
       );
       if (!result.rowCount) return null;
@@ -282,10 +306,15 @@ export function createPostgresCaseRepository(options: {
     async findPrecedents(query) {
       const result = await pool.query(
         `SELECT cases.id AS case_id, cases.proposal, cases.risk_level,
-                court_runs.id AS run_id, court_runs.completed_at, ruling_reports.report
+                court_runs.id AS run_id, court_runs.completed_at, ruling_reports.report,
+                latest.thesis_outcome, latest.realized_return_pct
          FROM cases
          JOIN court_runs ON court_runs.case_id = cases.id AND court_runs.status = 'COMPLETED'
          JOIN ruling_reports ON ruling_reports.run_id = court_runs.id
+         LEFT JOIN LATERAL (
+           SELECT thesis_outcome, realized_return_pct FROM court_outcomes
+           WHERE court_outcomes.run_id = court_runs.id ORDER BY observed_at DESC LIMIT 1
+         ) latest ON true
          WHERE cases.agent_id = $1
            AND cases.proposal->>'asset' = $2
            AND cases.proposal->>'market' = $3
@@ -309,41 +338,109 @@ export function createPostgresCaseRepository(options: {
           status: report.status,
           verdict: report.verdict,
           dissentingJudgeIds: report.dissentingJudgeIds,
+          outcome: (row.thesis_outcome as CourtPrecedent["outcome"]) ?? null,
+          realizedReturnPct: row.realized_return_pct === null || row.realized_return_pct === undefined ? null : Number(row.realized_return_pct),
         };
       });
     },
 
     async saveOutcome(record) {
       const result = await pool.query(
-        `INSERT INTO court_outcomes (id, run_id, agent_id, horizon, thesis_outcome, realized_return_pct, note, observed_at, recorded_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-         ON CONFLICT (run_id, horizon) DO UPDATE SET thesis_outcome = EXCLUDED.thesis_outcome, realized_return_pct = EXCLUDED.realized_return_pct, note = EXCLUDED.note, observed_at = EXCLUDED.observed_at, recorded_at = EXCLUDED.recorded_at
+        `INSERT INTO court_outcomes (id, run_id, agent_id, horizon, thesis_outcome, realized_return_pct, note, observed_at, recorded_at, source)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         ON CONFLICT (run_id, horizon) DO UPDATE SET thesis_outcome = EXCLUDED.thesis_outcome, realized_return_pct = EXCLUDED.realized_return_pct, note = EXCLUDED.note, observed_at = EXCLUDED.observed_at, recorded_at = EXCLUDED.recorded_at, source = EXCLUDED.source
          RETURNING *`,
-        [record.id, record.runId, record.agentId, record.horizon, record.thesisOutcome, record.realizedReturnPct ?? null, record.note ?? null, record.observedAt, record.recordedAt],
+        [record.id, record.runId, record.agentId, record.horizon, record.thesisOutcome, record.realizedReturnPct ?? null, record.note ?? null, record.observedAt, record.recordedAt, record.source ?? "AGENT"],
       );
-      const row = result.rows[0] as Row;
-      return { id: String(row.id), runId: String(row.run_id), agentId: String(row.agent_id), horizon: row.horizon as OutcomeRecord["horizon"], thesisOutcome: row.thesis_outcome as OutcomeRecord["thesisOutcome"], realizedReturnPct: row.realized_return_pct === null ? undefined : Number(row.realized_return_pct), note: row.note === null ? undefined : String(row.note), observedAt: iso(row.observed_at), recordedAt: iso(row.recorded_at) };
+      return outcomeFromRow(result.rows[0] as Row);
     },
 
     async listOutcomes(runId, agentId) {
-      const result = await pool.query(`SELECT court_outcomes.* FROM court_outcomes JOIN court_runs ON court_runs.id = court_outcomes.run_id JOIN cases ON cases.id = court_runs.case_id WHERE court_outcomes.run_id = $1 AND ($2::text IS NULL OR cases.agent_id = $2) ORDER BY observed_at`, [runId, agentId ?? null]);
-      return result.rows.map((row: Row) => ({ id: String(row.id), runId: String(row.run_id), agentId: String(row.agent_id), horizon: row.horizon as OutcomeRecord["horizon"], thesisOutcome: row.thesis_outcome as OutcomeRecord["thesisOutcome"], realizedReturnPct: row.realized_return_pct === null ? undefined : Number(row.realized_return_pct), note: row.note === null ? undefined : String(row.note), observedAt: iso(row.observed_at), recordedAt: iso(row.recorded_at) }));
+      const result = await pool.query(
+        `SELECT court_outcomes.* FROM court_outcomes
+         JOIN court_runs ON court_runs.id = court_outcomes.run_id
+         JOIN cases ON cases.id = court_runs.case_id
+         WHERE court_outcomes.run_id = $1 AND cases.agent_id IS NOT DISTINCT FROM $2::text
+         ORDER BY observed_at`,
+        [runId, agentId ?? null],
+      );
+      return result.rows.map((row: Row) => outcomeFromRow(row));
     },
 
     async getJudgeCalibration(agentId) {
-      const rows = await pool.query(`SELECT court_outcomes.thesis_outcome, ruling_reports.report FROM court_outcomes JOIN ruling_reports ON ruling_reports.run_id = court_outcomes.run_id JOIN court_runs ON court_runs.id = court_outcomes.run_id JOIN cases ON cases.id = court_runs.case_id WHERE cases.agent_id = $1`, [agentId]);
-      const stats = new Map(["judge-risk", "judge-evidence", "judge-strategy"].map((judgeId) => [judgeId, { resolved: 0, correct: 0, incorrect: 0 }]));
-      for (const row of rows.rows as Row[]) {
-        if (row.thesis_outcome === "INCONCLUSIVE") continue;
-        const report = rulingReportSchema.parse(row.report);
-        for (const judge of report.judges) {
-          if (!judge.vote || judge.vote === "ABSTAIN") continue;
-          const stat = stats.get(judge.judgeId)!; stat.resolved += 1;
-          const correct = (judge.vote === "APPROVE" && row.thesis_outcome === "CONFIRMED") || (judge.vote === "REJECT" && row.thesis_outcome === "REFUTED");
-          if (correct) stat.correct += 1; else stat.incorrect += 1;
-        }
-      }
-      return [...stats.entries()].map(([judgeId, stat]) => ({ judgeId: judgeId as JudgeCalibration["judgeId"], ...stat, accuracy: stat.resolved ? stat.correct / stat.resolved : null }));
+      const rows = await pool.query(
+        `SELECT court_outcomes.thesis_outcome, ruling_reports.report FROM court_outcomes
+         JOIN ruling_reports ON ruling_reports.run_id = court_outcomes.run_id
+         JOIN court_runs ON court_runs.id = court_outcomes.run_id
+         JOIN cases ON cases.id = court_runs.case_id
+         WHERE $1::text IS NULL OR cases.agent_id = $1`,
+        [agentId],
+      );
+      return scoreJudges((rows.rows as Row[]).flatMap((row) => scoredFromRow(row) ?? []));
+    },
+
+    async getTrackRecord({ agentId, asset }) {
+      const load = async (ownScopeOnly: boolean) => (await pool.query(
+        `SELECT court_outcomes.thesis_outcome, court_outcomes.realized_return_pct, court_outcomes.observed_at,
+                ruling_reports.report, cases.proposal, court_runs.result->'analystCase'->>'marketBias' AS direction
+         FROM court_outcomes
+         JOIN ruling_reports ON ruling_reports.run_id = court_outcomes.run_id
+         JOIN court_runs ON court_runs.id = court_outcomes.run_id
+         JOIN cases ON cases.id = court_runs.case_id
+         WHERE $1 = false OR cases.agent_id IS NOT DISTINCT FROM $2::text
+         ORDER BY court_outcomes.observed_at DESC LIMIT 500`,
+        [ownScopeOnly, agentId],
+      )).rows as Row[];
+      const own = await load(true);
+      const ownDecided = own.filter((row) => row.thesis_outcome !== "INCONCLUSIVE").length;
+      const useOwn = agentId !== null && ownDecided >= MIN_AGENT_RESOLVED;
+      const scoredRows = useOwn ? own : await load(false);
+      // Same-asset lessons come only from the caller's own scope, so one
+      // tenant's positions never leak into another tenant's prompt.
+      const sameAsset: ResolvedPrecedent[] = own
+        .filter((row) => (row.proposal as { asset?: string }).asset === asset && (row.direction === "LONG" || row.direction === "SHORT"))
+        .map((row) => {
+          const report = rulingReportSchema.safeParse(row.report);
+          const proposal = row.proposal as { asset: string; timeframe: string };
+          return {
+            asset: proposal.asset,
+            timeframe: proposal.timeframe,
+            direction: row.direction as "LONG" | "SHORT",
+            verdict: report.success ? report.data.verdict : null,
+            outcome: row.thesis_outcome as ResolvedPrecedent["outcome"],
+            realizedReturnPct: row.realized_return_pct === null ? null : Number(row.realized_return_pct),
+            concludedAt: iso(row.observed_at),
+          };
+        });
+      return buildTrackRecord({
+        scope: useOwn ? "AGENT" : "COURT",
+        scored: scoredRows.flatMap((row) => scoredFromRow(row) ?? []),
+        sameAsset,
+      });
+    },
+
+    async listRunsAwaitingOutcome(completedBefore, limit) {
+      const result = await pool.query(
+        `SELECT court_runs.id, court_runs.completed_at, court_runs.result, cases.agent_id, cases.proposal
+         FROM court_runs
+         JOIN cases ON cases.id = court_runs.case_id
+         WHERE court_runs.status = 'COMPLETED' AND court_runs.completed_at <= $1
+           AND NOT EXISTS (SELECT 1 FROM court_outcomes WHERE court_outcomes.run_id = court_runs.id)
+         ORDER BY court_runs.completed_at ASC LIMIT $2`,
+        [completedBefore, limit],
+      );
+      return (result.rows as Row[]).map((row) => {
+        const proposal = row.proposal as { asset: string; market: string; timeframe: string };
+        return {
+          runId: String(row.id),
+          agentId: row.agent_id === null ? null : String(row.agent_id),
+          completedAt: iso(row.completed_at),
+          asset: proposal.asset,
+          market: proposal.market,
+          timeframe: proposal.timeframe,
+          result: row.result,
+        };
+      });
     },
 
     async close() {
