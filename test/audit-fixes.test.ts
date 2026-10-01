@@ -301,4 +301,16 @@ test("reference plans explain their stop placement in plain language", async () 
   assert.match(plans.LONG.note, /just below the recent swing low|inside the recent range/);
   assert.match(plans.SHORT.note, /just above the recent swing high|inside the recent range/);
   assert.doesNotMatch(plans.LONG.note + plans.SHORT.note, /d.d{6,}/, "prices are rounded");
+  for (const plan of [plans.LONG, plans.SHORT]) {
+    assert.match(plan.stopPlacement, /^(STRUCTURAL|INSIDE_RANGE)$/);
+    assert.ok(plan.targetAtr > 0 && plan.targetAtr < 3, "target distance is a bounded ATR number");
+    assert.equal("stopBeyondSwing" in plan, false, "no boolean that reads like a violation");
+  }
+});
+
+test("flags candles older than two bars as stale and keeps the live bar current", async () => {
+  const { dataFreshness } = await import("../src/evidence/market-features.js");
+  assert.deepEqual(dataFreshness("2026-10-01T16:00:00.000Z", "2026-10-01T17:11:15.000Z", "4H"), { ageMinutes: 71, stale: false });
+  assert.equal(dataFreshness("2026-09-26T20:00:00.000Z", "2026-09-28T17:00:00.000Z", "4H")?.stale, true);
+  assert.equal(dataFreshness("x", "2026-10-01T17:00:00.000Z", "4H"), null);
 });

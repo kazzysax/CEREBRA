@@ -123,12 +123,17 @@ export type ReferencePlan = {
   targetPrice: number;
   rewardRisk: number;
   stopAtr: number;
-  targetBeyondSwing: boolean;
-  // False when the nearest structural stop (just beyond the recent swing) is
-  // further than this horizon's budget allows, so the stop sits inside the range.
-  stopBeyondSwing: boolean;
-  // Plain-language reading of the levels. Live judges misread the boolean
-  // flags as violations, so the plan states what they mean.
+  // Distance from entry to target in ATR, so reachability is a number rather
+  // than a label the models can misread.
+  targetAtr: number;
+  // STRUCTURAL is the correct placement: just beyond the recent swing, inside
+  // the budget. INSIDE_RANGE means the structural stop was too far for this
+  // horizon's budget, so the stop was pulled inside the range. These are labels
+  // rather than booleans: live judges and both researchers read a
+  // `stopBeyondSwing: true` flag as a violation even beside a note saying it
+  // was the correct placement.
+  stopPlacement: "STRUCTURAL" | "INSIDE_RANGE";
+  // Plain-language reading of the levels.
   note: string;
 };
 
@@ -167,8 +172,8 @@ export function referencePlans(
         ? `Stop ${stop} sits just ${long ? "below" : "above"} the recent swing ${long ? "low" : "high"} ${swingLevel}, the correct structural place for a ${direction} stop.`
         : `The structural stop beyond the recent swing ${long ? "low" : "high"} ${swingLevel} is too far for this horizon's budget, so stop ${stop} sits inside the recent range and is more exposed to noise.`,
       targetBeyondSwing
-        ? `Target ${target} lies beyond the window's swing ${long ? "high" : "low"}, so reaching it needs a breakout.`
-        : `Target ${target} lies inside the window's range.`,
+        ? `Target ${target} is ${round(rewardDistance / atr, 2)} ATR from entry and beyond the window's swing ${long ? "high" : "low"}, so reaching it needs a breakout.`
+        : `Target ${target} is ${round(rewardDistance / atr, 2)} ATR from entry, within one-bar reach.`,
     ].join(" ");
     return {
       direction,
@@ -177,9 +182,8 @@ export function referencePlans(
       targetPrice: target,
       rewardRisk: round(Math.abs(target - entry) / Math.abs(entry - stop), 2),
       stopAtr: round(riskDistance / atr, 2),
-      // Beyond the window's swing extreme the target needs a breakout to be reached.
-      targetBeyondSwing,
-      stopBeyondSwing,
+      targetAtr: round(rewardDistance / atr, 2),
+      stopPlacement: stopBeyondSwing ? "STRUCTURAL" : "INSIDE_RANGE",
       note,
     };
   };

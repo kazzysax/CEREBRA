@@ -210,6 +210,21 @@ export function computeMarketFeatures(input: {
   };
 }
 
+const INTERVAL_MS: Record<string, number> = {
+  "1m": 60_000, "3m": 180_000, "5m": 300_000, "15m": 900_000, "30m": 1_800_000,
+  "1h": 3_600_000, "4h": 14_400_000, "6h": 21_600_000, "12h": 43_200_000, "1d": 86_400_000,
+};
+
+// How old the newest candle is at the snapshot. A bar opened within one
+// interval is the live bar; more than two intervals means the feed stalled or
+// the market is closed, and the data should not be read as current.
+export function dataFreshness(newestAt: string, observedAt: string, interval: string): { ageMinutes: number; stale: boolean } | null {
+  const barMs = INTERVAL_MS[interval.toLowerCase()];
+  const age = new Date(observedAt).getTime() - new Date(newestAt).getTime();
+  if (!barMs || !Number.isFinite(age)) return null;
+  return { ageMinutes: Math.max(0, Math.round(age / 60_000)), stale: age > 2 * barMs };
+}
+
 export function renderFeatureSummary(features: MarketFeatures): string {
   const lines = [
     `Measured market features for ${features.symbol} (${features.interval} candles), computed by Cerebra from the Bitget snapshot at ${features.observedAt}.`,
@@ -227,6 +242,13 @@ export function renderFeatureSummary(features: MarketFeatures): string {
   if (c) {
     lines.push(
       `Candles: ${c.count} bars, newest opened ${c.newestAt}.`,
+      ...(() => {
+        const fresh = dataFreshness(c.newestAt, features.observedAt, features.interval);
+        if (!fresh) return [];
+        return [fresh.stale
+          ? `DATA FRESHNESS: STALE. The newest bar opened ${fresh.ageMinutes} minutes before this snapshot, more than two ${features.interval} bars; the market may be closed or the feed stalled, so do not treat this as a current read.`
+          : `Data freshness: current (newest bar opened ${fresh.ageMinutes} minutes before this snapshot).`];
+      })(),
       `Trend classification: ${c.trend} (${c.trendEvidence}).`,
       `Returns: last bar ${c.returnsPct.last1 ?? "n/a"}%, last 3 bars ${c.returnsPct.last3 ?? "n/a"}%, last 6 bars ${c.returnsPct.last6 ?? "n/a"}%, last 12 bars ${c.returnsPct.last12 ?? "n/a"}%, whole window ${c.returnsPct.all ?? "n/a"}%.`,
       `Price vs short SMA ${c.priceVsSmaShortPct ?? "n/a"}%, vs long SMA ${c.priceVsSmaLongPct ?? "n/a"}%.`,
