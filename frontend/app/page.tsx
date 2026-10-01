@@ -585,6 +585,18 @@ export default function Home() {
               <div><dt>Reward / risk</dt><dd>{result.report.recommendation.rewardRisk ?? '—'}</dd></div>
             </dl> : null}
             <div className="recommendation-card__body"><p>{result.report.recommendation.rationale}</p><div><strong>Before acting</strong><ul>{result.report.recommendation.conditions.map((condition) => <li key={condition}>{condition}</li>)}</ul></div><div><strong>Invalidation</strong><p>{result.report.recommendation.invalidation}</p></div></div>
+            {result.report.betterLevel ? <div className="recommendation-card__body" aria-label="Optional better level">
+              <div><strong>Optional: a better level to wait for ({result.report.betterLevel.judges.length} of 3 judges)</strong>
+                <p>{result.report.betterLevel.instruction}</p>
+                <dl className="trade-plan">
+                  <div><dt>{result.report.betterLevel.direction} entry</dt><dd>{formatPrice(result.report.betterLevel.entryPrice)}</dd></div>
+                  <div><dt>Stop</dt><dd>{formatPrice(result.report.betterLevel.stopPrice)}</dd></div>
+                  <div><dt>Target</dt><dd>{formatPrice(result.report.betterLevel.targetPrice)}</dd></div>
+                  <div><dt>Reward / risk</dt><dd>{result.report.betterLevel.rewardRisk}</dd></div>
+                </dl>
+                <ul>{result.report.betterLevel.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+              </div>
+            </div> : null}
             <small>{result.report.recommendation.disclaimer}</small>
             <p className="learning-line">{learningLine(result.report)}</p>
           </section>

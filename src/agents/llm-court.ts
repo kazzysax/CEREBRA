@@ -1,5 +1,7 @@
 import type { z } from "zod";
+import { ageLabel, type AgeLabel } from "../court/agent-memory.js";
 import { marketFeaturesOf, planStandard, referencePlans, riskBudgets } from "../court/risk-check.js";
+import type { TrackRecord } from "../court/track-record.js";
 import {
   analystCaseSchema,
   challengeSchema,
@@ -28,7 +30,7 @@ export type StructuredGenerator = <T>(request: {
   maxOutputTokens: number;
 }) => Promise<ModelCall<T>>;
 
-const outputBudget = { analyst: 1_400, challenger: 900, judge: 900 } as const;
+const outputBudget = { analyst: 1_400, challenger: 900, judge: 1_100 } as const;
 
 const sharedSystem = [
   "You are an agent in Cerebra, an evidence-bound decision court for tokenized U.S. stock futures.",
@@ -42,10 +44,32 @@ const sharedSystem = [
 
 const summaryCap = 4_000;
 
+// Past rulings and track-record entries describe an older market. Each carries
+// its age and a FRESH/AGING/STALE label relative to this case's timeframe, so
+// the models can see how much weight a prior ruling deserves. Age is measured
+// from the evidence snapshot, not the wall clock.
+function snapshotTime(submission: CaseSubmission): number {
+  const times = submission.evidence.map((item) => new Date(item.observedAt).getTime()).filter(Number.isFinite);
+  return times.length ? Math.max(...times) : Date.now();
+}
+
+export function withAge<T extends { concludedAt: string }>(items: T[], submission: CaseSubmission): Array<T & { ageHours: number; freshness: AgeLabel }> {
+  const asOf = snapshotTime(submission);
+  return items.map((item) => {
+    const ageHours = Math.max(0, Math.round(((asOf - new Date(item.concludedAt).getTime()) / 3_600_000) * 10) / 10);
+    return { ...item, ageHours, freshness: ageLabel(ageHours, submission.proposal.timeframe) };
+  });
+}
+
+function agedTrackRecord(record: TrackRecord | null, submission: CaseSubmission) {
+  return record ? { ...record, sameAsset: withAge(record.sameAsset, submission) } : null;
+}
+
 const MEMORY_INSTRUCTION =
   "agentMemory (if supplied) is the agent's own saved strategy and beliefs about this asset. It is the agent's claim, not evidence, and must never be cited as evidence: " +
   "test FRESH beliefs against the measured data and say plainly when the data contradicts them; treat EXPIRED beliefs as stale and do not rely on them; " +
-  "respect the strategy's constraints and invalidation conditions, and flag a plan that breaks them.";
+  "respect the strategy's constraints and invalidation conditions, and flag a plan that breaks them. " +
+  "Currency: only the measured data in the evidence, observed at the snapshot time, describes the market now. Anything marked AGING or STALE (beliefs, strategy, past rulings, track-record entries) describes an older market: use it as weak context at most and never let it override the current measured data; treat FRESH items as context to test, not as proof.";
 
 export type EvidenceView = {
   items: Array<{ ref: string; title: string; source: string; observedAt: string; summary: string }>;
@@ -218,8 +242,8 @@ export function createLlmCourtProvider(options: {
           MEMORY_INSTRUCTION + " Confidence is a probability, not a feeling.",
         {
           ...casePayload(context.submission, view),
-          precedents: context.precedents,
-          trackRecord: context.trackRecord ?? null,
+          precedents: withAge(context.precedents, context.submission),
+          trackRecord: agedTrackRecord(context.trackRecord ?? null, context.submission),
           agentMemory: context.agentMemory ?? null,
         },
       );
@@ -245,7 +269,7 @@ export function createLlmCourtProvider(options: {
           ...casePayload(context.submission, view),
           analystCase: context.analystCase,
           riskCheck: context.riskCheck ?? null,
-          precedents: context.precedents,
+          precedents: withAge(context.precedents, context.submission),
           agentMemory: context.agentMemory ?? null,
         },
       );
@@ -273,6 +297,7 @@ export function createLlmCourtProvider(options: {
             ? "alternativeVote: your separate ballot on the Analyst's alternativeRoute plan, judged on its own merits with the same doctrine; APPROVE or REJECT it, ABSTAIN only if your lens genuinely cannot assess it. "
             : "alternativeVote: null (no alternative route was offered). ") +
           "planStandard is the court's computed test for opening a position. MEETS_STANDARD: APPROVE unless you can cite one specific measured fact, with its evidence ID, that contradicts the plan's direction over this horizon; weak or modest momentum, a mid-range price, a cautious order book or lack of certainty are not grounds to reject, so reflect them as confidence between 0.5 and 0.65. FAILS_STANDARD: REJECT and name the failed check. MEETS_STANDARD only means the plan is allowed to be approved: if you judge it not actionable on the measured data, REJECT and cite the specific fact. An alternative route is advice only if you would genuinely open it; vote REJECT on it otherwise, and never approve a plan merely because it was offered. Never use RISK_EXCESSIVE when the riskCheck is within budget. " +
+          "betterLevel is optional and must be null unless the measured data shows that waiting for a different entry, or the other side at a specific level, would clearly give a better outcome than the plan you are voting on (for example, wait for a pullback to the recent low before buying). When you do give one, use measured levels: direction, entryPrice 0.3 to 1.5 ATR from the last price, a stopPrice and targetPrice that meet the riskBudget, and a one-sentence reason. It must not fight the measured trend. Your vote does not depend on it, and never fill it merely because you can. " +
           "reasonCode must agree with your vote. Treat the computed riskCheck as fact. " +
           MEMORY_INSTRUCTION + " " +
           "If calibration data is supplied, it reports your own accuracy on resolved outcomes; let it temper the confidence you report without changing your vote on this case's evidence.",
@@ -285,8 +310,8 @@ export function createLlmCourtProvider(options: {
             primary: planStandard(context.riskCheck?.primary),
             alternative: hasAlternative ? planStandard(context.riskCheck?.alternative) : null,
           },
-          precedents: context.precedents,
-          trackRecord: context.trackRecord ?? null,
+          precedents: withAge(context.precedents, context.submission),
+          trackRecord: agedTrackRecord(context.trackRecord ?? null, context.submission),
           agentMemory: context.agentMemory ?? null,
           calibration: context.calibration,
           doctrine: {

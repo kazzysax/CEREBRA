@@ -335,3 +335,96 @@ test("only accepts DATA_STALE when the measured freshness line says the data is 
   assert.equal(coherentReason(decision, "STRATEGY", false), "STRATEGY_INCOHERENT");
   assert.equal(coherentReason(decision, "RISK", true), "DATA_STALE");
 });
+
+// ---- Optional better level, judge-proposed and validated in code ----
+function trendSubmission(trend: "UP" | "DOWN") {
+  return { proposal: { asset: "TSLAUSDT", market: "usdt-futures", timeframe: "4h", direction: "EITHER", summary: "Pick whichever side the data supports." }, riskLevel: "MEDIUM", evidence: featureEvidence({ trend }) } as CaseSubmission;
+}
+
+async function levelFor(submission: CaseSubmission, direction: "LONG" | "SHORT", atrFromLast: number) {
+  const { marketFeaturesOf } = await import("../src/court/risk-check.js");
+  const features = marketFeaturesOf(submission)!;
+  const atr = features.candles!.atr!;
+  const sign = direction === "LONG" ? 1 : -1;
+  const entry = features.lastPrice - sign * atrFromLast * atr;
+  return { direction, entryPrice: entry, stopPrice: entry - sign * 0.8 * atr, targetPrice: entry + sign * 1.4 * atr, reason: "Better to wait for a pullback to this level." };
+}
+
+test("accepts a better level that is a real, reachable, in-budget alternative to entering now", async () => {
+  const { checkBetterLevel } = await import("../src/court/risk-check.js");
+  const submission = trendSubmission("UP");
+  assert.equal(checkBetterLevel(submission, await levelFor(submission, "LONG", 0.7)).valid, true);
+  const same = checkBetterLevel(submission, await levelFor(submission, "LONG", 0.1));
+  assert.equal(same.valid, false);
+  assert.match(same.problems.join(" "), /not a different level/);
+  const far = checkBetterLevel(submission, await levelFor(submission, "LONG", 2.5));
+  assert.match(far.problems.join(" "), /too far/);
+  const counterTrend = checkBetterLevel(submission, await levelFor(submission, "SHORT", 0.7));
+  assert.match(counterTrend.problems.join(" "), /fights the measured trend/);
+});
+
+test("offers a better level only when two judges agree on the same side and entry", async () => {
+  const { consensusBetterLevel } = await import("../src/court/better-level.js");
+  const level = (direction: "LONG" | "SHORT", entryPrice: number) => ({ direction, entryPrice, stopPrice: entryPrice - 2, targetPrice: entryPrice + 3, reason: "wait" });
+  const context = { atr: 2, lastPrice: 100 };
+  assert.equal(consensusBetterLevel([{ judgeId: "judge-risk", level: level("LONG", 98) }], context), null, "one judge is not a majority");
+  assert.equal(consensusBetterLevel([
+    { judgeId: "judge-risk", level: level("LONG", 98) }, { judgeId: "judge-evidence", level: level("SHORT", 102) },
+  ], context), null, "disagreeing sides give nothing");
+  assert.equal(consensusBetterLevel([
+    { judgeId: "judge-risk", level: level("LONG", 96) }, { judgeId: "judge-evidence", level: level("LONG", 99) },
+  ], context), null, "entries more than half an ATR apart give nothing");
+  const advice = consensusBetterLevel([
+    { judgeId: "judge-risk", level: level("LONG", 98) }, { judgeId: "judge-evidence", level: level("LONG", 98.6) }, { judgeId: "judge-strategy", level: level("LONG", 98.2) },
+  ], context)!;
+  assert.equal(advice.direction, "LONG");
+  assert.equal(advice.entryPrice, 98.2);
+  assert.equal(advice.judges.length, 3);
+  assert.match(advice.instruction, /Optional/);
+});
+
+test("a court run attaches a better level only when judges propose one, and never requires it", async () => {
+  const submission = trendSubmission("UP");
+  const base = createMockCourtProvider();
+  const proposing = (judges: string[], level: object): typeof base => ({
+    ...base,
+    async runJudge(context) {
+      const call = await base.runJudge(context);
+      return { ...call, output: { ...call.output, betterLevel: judges.includes(context.judgeId) ? level as never : null } };
+    },
+  });
+  const level = await levelFor(submission, "LONG", 0.7);
+  const none = await runCourt(submission, base);
+  assert.equal(none.report.betterLevel ?? null, null, "advice is not compulsory");
+  const two = await runCourt(submission, proposing(["judge-risk", "judge-strategy"], level));
+  assert.equal((two.report.betterLevel as { direction?: string } | null)?.direction, "LONG");
+  const one = await runCourt(submission, proposing(["judge-risk"], level));
+  assert.equal(one.report.betterLevel ?? null, null, "one judge alone is not advice");
+  const bad = await runCourt(submission, proposing(["judge-risk", "judge-strategy"], { ...level, direction: "SHORT" }));
+  assert.equal(bad.report.betterLevel ?? null, null, "a level that fights the trend is dropped");
+  assert.ok(bad.report.integrity.warnings?.some((warning) => /not used/.test(warning)));
+});
+
+// ---- Staleness of remembered context ----
+test("labels beliefs, strategies and past rulings by age instead of assuming they are current", async () => {
+  const { ageLabel } = await import("../src/court/agent-memory.js");
+  assert.equal(ageLabel(20, "4h"), "FRESH");
+  assert.equal(ageLabel(48, "4h"), "AGING");
+  assert.equal(ageLabel(200, "4h"), "STALE");
+  assert.equal(ageLabel(8, "15m"), "STALE", "the same age is old on a short timeframe");
+  const { withAge } = await import("../src/agents/llm-court.js");
+  const submission = trendSubmission("UP");
+  const [recent, old] = withAge([
+    { concludedAt: "2026-09-29T08:00:00.000Z" }, { concludedAt: "2026-08-01T08:00:00.000Z" },
+  ], submission);
+  assert.equal(recent!.freshness, "FRESH");
+  assert.equal(old!.freshness, "STALE");
+});
+
+test("a malformed betterLevel from a model becomes null instead of voiding the judge's ballot", async () => {
+  const { judgeDecisionSchema } = await import("../src/agents/contracts.js");
+  const base = { vote: "REJECT", alternativeVote: null, confidence: 0.6, reasonCode: "RISK_EXCESSIVE", rationale: "r", evidenceIds: [] };
+  assert.equal(judgeDecisionSchema.parse({ ...base, betterLevel: { direction: "UP", entryPrice: "high" } }).betterLevel, null);
+  assert.equal(judgeDecisionSchema.parse({ ...base, betterLevel: null }).betterLevel, null);
+  assert.equal(judgeDecisionSchema.parse({ ...base, betterLevel: { direction: "LONG", entryPrice: 98, stopPrice: 96, targetPrice: 101, reason: "pullback" } }).betterLevel?.entryPrice, 98);
+});

@@ -21,6 +21,10 @@ export type RulingReport = {
     entryPrice?: number | null; stopPrice?: number | null; targetPrice?: number | null; rewardRisk?: number | null;
   };
   alternativeTally?: { approve: number; reject: number; abstain: number } | null;
+  betterLevel?: {
+    direction: 'LONG' | 'SHORT'; entryPrice: number; stopPrice: number; targetPrice: number; rewardRisk: number; lastPrice: number;
+    judges: string[]; reasons: string[]; instruction: string; disclaimer: string;
+  } | null;
   learning?: {
     scope: 'AGENT' | 'COURT'; resolvedOutcomes: number; confirmed: number; refuted: number; sameAssetPrecedents: number;
     agentMemory?: { strategyVersion: number | null; freshBeliefs: number; staleBeliefs: number; undatedBeliefs: number } | null;

@@ -19,7 +19,8 @@ import type { JudgeCalibration } from "../outcomes/contracts.js";
 import { calibrateConfidence, type CalibrationAdjustment } from "./calibration.js";
 import { advisoryDoctrineV2, type CourtDoctrine } from "./doctrine.js";
 import type { CourtPrecedent } from "./precedent.js";
-import { computeRiskCheck, type RiskCheck } from "./risk-check.js";
+import { checkBetterLevel, computeRiskCheck, marketFeaturesOf, type RiskCheck } from "./risk-check.js";
+import { consensusBetterLevel } from "./better-level.js";
 import type { TrackRecord } from "./track-record.js";
 import type { AgentMemory } from "./agent-memory.js";
 
@@ -299,6 +300,22 @@ export async function runCourt(
     };
   });
 
+  // Optional advice: a better level to wait for, kept only if a majority of
+  // judges proposed a compatible one and each passes the same risk standard.
+  const judgeLevels = judgeResponses.flatMap((response) => {
+    if (!response.ok || !response.ballot.betterLevel) return [];
+    const checked = checkBetterLevel(submission, response.ballot.betterLevel);
+    if (!checked.valid) {
+      warnings.push(`${response.ballot.judgeId} proposed a better level that was not used: ${checked.problems.join("; ")}.`);
+      return [];
+    }
+    return [{ judgeId: response.ballot.judgeId, level: response.ballot.betterLevel }];
+  });
+  const marketFeatures = marketFeaturesOf(submission);
+  const betterLevel = marketFeatures?.candles?.atr
+    ? consensusBetterLevel(judgeLevels, { atr: marketFeatures.candles.atr, lastPrice: marketFeatures.lastPrice })
+    : null;
+
   const completedAt = now().toISOString();
   const proposalId = submission.proposal.id ?? "proposal-" + runId;
   const proposal = {
@@ -327,6 +344,7 @@ export async function runCourt(
     advisory: analystCase,
   });
   report.riskCheck = riskCheck as unknown as Record<string, unknown>;
+  report.betterLevel = betterLevel as unknown as Record<string, unknown> | null;
   const memorySummary = agentMemory
     ? {
       strategyVersion: agentMemory.strategy?.version ?? null,

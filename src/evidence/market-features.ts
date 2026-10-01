@@ -218,6 +218,10 @@ const INTERVAL_MS: Record<string, number> = {
 // How old the newest candle is at the snapshot. A bar opened within one
 // interval is the live bar; more than two intervals means the feed stalled or
 // the market is closed, and the data should not be read as current.
+export function intervalMs(interval: string): number | null {
+  return INTERVAL_MS[interval.trim().toLowerCase()] ?? null;
+}
+
 export function dataFreshness(newestAt: string, observedAt: string, interval: string): { ageMinutes: number; stale: boolean } | null {
   const barMs = INTERVAL_MS[interval.toLowerCase()];
   const age = new Date(observedAt).getTime() - new Date(newestAt).getTime();

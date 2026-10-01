@@ -122,6 +122,7 @@ export function createMockCourtProvider(): CourtModelProvider {
       } as const;
       return result({
         vote: primaryApproved ? "APPROVE" : "REJECT",
+        betterLevel: null,
         alternativeVote: alternativeOffered ? (approves(check?.alternative) ? "APPROVE" : "REJECT") : null,
         confidence: primaryApproved ? 0.68 : 0.64,
         reasonCode: codes[context.judgeId][primaryApproved ? 0 : 1],

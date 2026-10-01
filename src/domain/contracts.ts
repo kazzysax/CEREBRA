@@ -21,6 +21,17 @@ export const reasonCodeSchema = z.enum([
   "OTHER",
 ]);
 
+// A judge's optional view that waiting for a different entry, or the other side
+// at a specific level, would give a better outcome than the plan on the table.
+export const betterLevelSchema = z.object({
+  direction: z.enum(["LONG", "SHORT"]),
+  entryPrice: z.number().positive(),
+  stopPrice: z.number().positive(),
+  targetPrice: z.number().positive(),
+  reason: z.string().trim().min(1).max(400),
+}).strict();
+export type BetterLevel = z.infer<typeof betterLevelSchema>;
+
 export const judgeBallotSchema = z.object({
   judgeId: judgeIdSchema,
   lens: judgeLensSchema,
@@ -30,6 +41,7 @@ export const judgeBallotSchema = z.object({
   rationale: z.string().trim().min(1).max(2_000),
   evidenceIds: z.array(z.string().trim().min(1)).max(25),
   alternativeVote: voteSchema.nullable().optional(),
+  betterLevel: betterLevelSchema.nullable().optional(),
 });
 export type JudgeBallot = z.infer<typeof judgeBallotSchema>;
 
@@ -145,6 +157,9 @@ export const rulingReportSchema = z.object({
   }).nullable().optional(),
   riskCheck: z.record(z.string(), z.unknown()).nullable().optional(),
   learning: z.record(z.string(), z.unknown()).nullable().optional(),
+  // Optional court advice: a better level to wait for, only when a majority of
+  // judges independently proposed a compatible one that passes the risk budget.
+  betterLevel: z.record(z.string(), z.unknown()).nullable().optional(),
   doctrine: z.object({
     id: z.string().min(1),
     version: z.string().min(1),

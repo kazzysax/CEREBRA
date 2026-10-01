@@ -1,4 +1,5 @@
 import type { AnalystCase, CaseSubmission } from "../agents/contracts.js";
+import type { BetterLevel } from "../domain/contracts.js";
 import type { MarketFeatures } from "../evidence/market-features.js";
 
 type Direction = "LONG" | "SHORT" | "NEUTRAL";
@@ -114,6 +115,31 @@ function checkRoute(
     rewardPct: round((reward / entry) * 100),
     rewardRisk, stopAtr, levelsValid, trendAligned, depthAligned, withinRiskBudget,
   };
+}
+
+// A judge's better level only counts if it passes the same standard as any plan
+// and is a real alternative to entering now: at least 0.3 ATR from the last
+// price (otherwise it is the current price), and no more than 1.5 ATR away
+// (otherwise it is not reachable within the horizon).
+export function checkBetterLevel(
+  submission: CaseSubmission,
+  level: BetterLevel,
+): { valid: boolean; problems: string[]; route: RouteCheck } {
+  const features = marketFeaturesOf(submission);
+  const budget = riskBudgets[submission.riskLevel];
+  const route = checkRoute(level.direction, {
+    entry: level.entryPrice, stop: level.stopPrice, target: level.targetPrice,
+  }, features, budget);
+  const problems: string[] = [...planStandard(route).failures];
+  const atr = features?.candles?.atr ?? null;
+  if (!features || !atr || atr <= 0) {
+    problems.push("no measured volatility to place the level against");
+  } else {
+    const distance = Math.abs(level.entryPrice - features.lastPrice) / atr;
+    if (distance < 0.3) problems.push("entry is within 0.3 ATR of the current price, so it is not a different level");
+    if (distance > 1.5) problems.push("entry is more than 1.5 ATR from the current price, too far to wait for within this horizon");
+  }
+  return { valid: problems.length === 0, problems, route };
 }
 
 export type PlanStandard = {

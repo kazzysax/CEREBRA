@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  betterLevelSchema,
   evidenceReferenceSchema,
   judgeIdSchema,
   judgeLensSchema,
@@ -82,6 +83,10 @@ export const judgeDecisionSchema = z.object({
   vote: voteSchema,
   // Ballot on the Analyst's alternative route; null when no alternative was offered.
   alternativeVote: voteSchema.nullable(),
+  // Optional: null unless waiting for a different entry, or the other side at a
+  // specific level, clearly beats the plan being voted on.
+  // A malformed level becomes null rather than voiding the whole ballot.
+  betterLevel: betterLevelSchema.nullable().catch(null),
   confidence: z.number().min(0).max(1),
   reasonCode: reasonCodeSchema,
   rationale: z.string().trim().min(1).max(2_000),

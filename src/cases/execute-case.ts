@@ -68,6 +68,7 @@ export async function executeCase(options: {
         memory: options.memory,
         agentId: options.agentId,
         asset: record.submission.proposal.asset,
+        timeframe: record.submission.proposal.timeframe,
         now: now(),
       }).catch(() => null)
       : null;
