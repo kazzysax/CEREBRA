@@ -116,6 +116,29 @@ function checkRoute(
   };
 }
 
+export type PlanStandard = {
+  status: "MEETS_STANDARD" | "FAILS_STANDARD" | "NO_TRADE";
+  // What failed, from the computed checks.
+  failures: string[];
+  // Soft factors that lower confidence but are not grounds to reject alone.
+  cautions: string[];
+};
+
+// The court's measured standard for opening a position, computed in code so a
+// judge cannot invent a stricter one: valid levels, within the risk budget and
+// not fighting the measured trend. Depth against the direction is a caution.
+// Live judges rejected clean, budget-compliant trend plans for "weak momentum".
+export function planStandard(route: RouteCheck | null | undefined): PlanStandard {
+  if (!route || route.direction === "NEUTRAL") return { status: "NO_TRADE", failures: [], cautions: [] };
+  const failures: string[] = [];
+  const cautions: string[] = [];
+  if (!route.levelsValid) failures.push("levels are missing or on the wrong side of entry");
+  if (!route.withinRiskBudget) failures.push("reward/risk, stop distance or target reach is outside the risk budget");
+  if (route.trendAligned === false) failures.push("direction fights the measured trend");
+  if (route.depthAligned === false) cautions.push("order book leans against this direction");
+  return { status: failures.length ? "FAILS_STANDARD" : "MEETS_STANDARD", failures, cautions };
+}
+
 export type ReferencePlan = {
   direction: "LONG" | "SHORT";
   entryPrice: number;

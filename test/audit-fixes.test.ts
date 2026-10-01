@@ -314,3 +314,15 @@ test("flags candles older than two bars as stale and keeps the live bar current"
   assert.equal(dataFreshness("2026-09-26T20:00:00.000Z", "2026-09-28T17:00:00.000Z", "4H")?.stale, true);
   assert.equal(dataFreshness("x", "2026-10-01T17:00:00.000Z", "4H"), null);
 });
+
+test("computes a plan standard that approves clean trend plans and fails counter-trend or out-of-budget ones", async () => {
+  const { planStandard } = await import("../src/court/risk-check.js");
+  const route = { direction: "LONG", entry: 100, stop: 99, target: 102, riskPct: 1, rewardPct: 2, rewardRisk: 2, stopAtr: 1, levelsValid: true, trendAligned: true, depthAligned: null, withinRiskBudget: true, findings: [] } as never;
+  assert.equal(planStandard(route).status, "MEETS_STANDARD");
+  assert.equal(planStandard({ ...(route as object), depthAligned: false } as never).status, "MEETS_STANDARD");
+  assert.deepEqual(planStandard({ ...(route as object), depthAligned: false } as never).cautions.length, 1);
+  assert.equal(planStandard({ ...(route as object), trendAligned: false } as never).status, "FAILS_STANDARD");
+  assert.equal(planStandard({ ...(route as object), withinRiskBudget: false } as never).status, "FAILS_STANDARD");
+  assert.equal(planStandard({ ...(route as object), direction: "NEUTRAL" } as never).status, "NO_TRADE");
+  assert.equal(planStandard(null).status, "NO_TRADE");
+});

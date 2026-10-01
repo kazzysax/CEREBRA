@@ -14,10 +14,12 @@ export type CourtDoctrine = {
 // v1 told judges that a static snapshot could never support a claim, while the
 // only evidence the court ever receives is a market snapshot; every case was
 // therefore rejected for "insufficient evidence". v2 judges the measured setup
-// on its merits and makes both approval and rejection reachable.
+// on its merits and makes both approval and rejection reachable. v3 adds the
+// computed plan standard: live v2 judges rejected clean, in-budget, trend-aligned
+// plans for "weak momentum", so every ruling was a rejection in practice.
 export const advisoryDoctrineV2: CourtDoctrine = {
   id: "cerebra-advisory-doctrine",
-  version: "v2",
+  version: "v3",
   title: "Judge the measured setup, bound the risk",
   principles: [
     "Cerebra gives advisory reports, never trading instructions or guarantees.",
@@ -25,6 +27,7 @@ export const advisoryDoctrineV2: CourtDoctrine = {
     "Claims in the thesis that the data cannot verify (news, earnings, product launches) are unverified context. They neither support nor sink the case by themselves; the call must stand on the measured data.",
     "Support a direction when the measured data agrees with it and the plan has a stop at a defensible level and a reward/risk that meets the court's computed risk budget.",
     "Oppose a direction when the measured data contradicts it, the stop is undefined, inside noise or too wide for the risk posture, or the reward does not justify the risk.",
+    "A plan that meets the computed plan standard (valid levels, within the risk budget, not fighting the measured trend) is approved unless a specific measured fact contradicts it. Modest momentum, a mid-range price or a cautious order book lower confidence; they do not by themselves justify rejection. A plan that fails the standard is rejected, naming the failed check.",
     "Treat the court's computed risk check as fact; do not recompute prices or ratios from raw arrays.",
     "Confidence is a probability: 0.5 means a coin flip, 0.6-0.75 a real but ordinary edge, above 0.85 only for strong agreement across trend, flow and levels.",
     "Learn from the track record: if the court was wrong on this asset or in this direction recently, say what is different now or lower confidence.",

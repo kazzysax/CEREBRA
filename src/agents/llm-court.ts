@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { marketFeaturesOf, referencePlans, riskBudgets } from "../court/risk-check.js";
+import { marketFeaturesOf, planStandard, referencePlans, riskBudgets } from "../court/risk-check.js";
 import {
   analystCaseSchema,
   challengeSchema,
@@ -267,6 +267,7 @@ export function createLlmCourtProvider(options: {
           (hasAlternative
             ? "alternativeVote: your separate ballot on the Analyst's alternativeRoute plan, judged on its own merits with the same doctrine; APPROVE or REJECT it, ABSTAIN only if your lens genuinely cannot assess it. "
             : "alternativeVote: null (no alternative route was offered). ") +
+          "planStandard is the court's computed test for opening a position. MEETS_STANDARD: APPROVE unless you can cite one specific measured fact, with its evidence ID, that contradicts the plan's direction over this horizon; weak or modest momentum, a mid-range price, a cautious order book or lack of certainty are not grounds to reject, so reflect them as confidence between 0.5 and 0.65. FAILS_STANDARD: REJECT and name the failed check. Never use RISK_EXCESSIVE when the riskCheck is within budget. " +
           "reasonCode must agree with your vote. Treat the computed riskCheck as fact. " +
           MEMORY_INSTRUCTION + " " +
           "If calibration data is supplied, it reports your own accuracy on resolved outcomes; let it temper the confidence you report without changing your vote on this case's evidence.",
@@ -275,6 +276,10 @@ export function createLlmCourtProvider(options: {
           analystCase: context.analystCase,
           challenge: context.challenge,
           riskCheck: context.riskCheck ?? null,
+          planStandard: {
+            primary: planStandard(context.riskCheck?.primary),
+            alternative: hasAlternative ? planStandard(context.riskCheck?.alternative) : null,
+          },
           precedents: context.precedents,
           trackRecord: context.trackRecord ?? null,
           agentMemory: context.agentMemory ?? null,
