@@ -58,6 +58,19 @@ export async function buildApp(options: {
   const app = await createMcpFastifyApp(allowAnyHost
     ? { host }
     : { host, allowedHosts: options.allowedHosts ?? ["127.0.0.1", "localhost"] });
+  // Agents commonly POST actions such as key rotation or job cancel with a JSON
+  // content type and no body; Fastify rejects that with a confusing 400. An
+  // empty body is treated as {} and malformed JSON still returns 400.
+  app.removeContentTypeParser("application/json");
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => {
+    const text = typeof body === "string" ? body : body.toString("utf8");
+    if (!text.trim()) return done(null, {});
+    try {
+      done(null, JSON.parse(text));
+    } catch {
+      done(Object.assign(new Error("Request body is not valid JSON"), { statusCode: 400 }), undefined);
+    }
+  });
   const courtProvider = options.courtProvider ?? createMockCourtProvider();
   const evidenceProvider = options.evidenceProvider ?? createMockEvidenceProvider();
   const repository = options.repository ?? createMemoryCaseRepository();

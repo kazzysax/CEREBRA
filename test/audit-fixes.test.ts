@@ -428,3 +428,16 @@ test("a malformed betterLevel from a model becomes null instead of voiding the j
   assert.equal(judgeDecisionSchema.parse({ ...base, betterLevel: null }).betterLevel, null);
   assert.equal(judgeDecisionSchema.parse({ ...base, betterLevel: { direction: "LONG", entryPrice: 98, stopPrice: 96, targetPrice: 101, reason: "pullback" } }).betterLevel?.entryPrice, 98);
 });
+
+test("accepts an empty JSON body on action routes and still rejects malformed JSON", async () => {
+  const app = await buildApp({ auth });
+  const registered = await app.inject({ method: "POST", url: "/v1/agents/register", headers: { "x-cerebra-registration-token": registrationToken, "content-type": "application/json" }, payload: { name: "Empty Body Agent" } });
+  const key = registered.json().apiKey as string;
+  const rotated = await app.inject({ method: "POST", url: "/v1/agents/me/keys/rotate", headers: { authorization: "Bearer " + key, "content-type": "application/json" } });
+  assert.equal(rotated.statusCode, 201, "no body with a JSON content type is fine");
+  const bad = await app.inject({ method: "POST", url: "/v1/agents/register", headers: { "x-cerebra-registration-token": registrationToken, "content-type": "application/json" }, payload: "{not json" });
+  assert.equal(bad.statusCode, 400, "malformed JSON is still rejected");
+  const mcp = await app.inject({ method: "POST", url: "/mcp", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: "Bearer " + (rotated.json().apiKey as string) }, payload: { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } } } });
+  assert.equal(mcp.statusCode, 200, "MCP still parses its JSON body");
+  await app.close();
+});
