@@ -327,26 +327,6 @@ test("computes a plan standard that approves clean trend plans and fails counter
   assert.equal(planStandard(null).status, "NO_TRADE");
 });
 
-test("puts the trend-side reference plan forward when the analyst stands aside or fights the trend", async () => {
-  const { withTrendRoute, planStandard, computeRiskCheck } = await import("../src/court/risk-check.js");
-  const submission = { proposal: { asset: "X", market: "usdt-futures", timeframe: "4h", direction: "EITHER", summary: "x".repeat(20) }, riskLevel: "MEDIUM", evidence: featureEvidence({ trend: "UP" }) } as never;
-  const neutral = { marketBias: "NEUTRAL", entryPrice: null, stopPrice: null, targetPrice: null, alternativeRoute: { direction: "NEUTRAL", entryPrice: null, stopPrice: null, targetPrice: null, timing: "t", rationale: "r", conditions: ["c"], invalidation: "i" } } as never;
-  const stood = withTrendRoute(submission, neutral);
-  assert.equal(stood.supplied, true);
-  assert.equal(stood.analystCase.alternativeRoute.direction, "LONG");
-  assert.equal(planStandard(computeRiskCheck(submission, stood.analystCase).alternative).status, "MEETS_STANDARD");
-  const against = withTrendRoute(submission, { ...(neutral as object), marketBias: "SHORT", entryPrice: 100, stopPrice: 101, targetPrice: 98 } as never);
-  assert.equal(against.supplied, true);
-  assert.equal(against.analystCase.alternativeRoute.direction, "LONG");
-  const aligned = computeRiskCheck(submission, stood.analystCase).alternative!;
-  const keep = withTrendRoute(submission, { ...(neutral as object), alternativeRoute: { ...((neutral as { alternativeRoute: object }).alternativeRoute), direction: "LONG", entryPrice: 1, stopPrice: 0.5, targetPrice: 2 } } as never);
-  assert.equal(keep.supplied, false, "an analyst's own trend-side alternative is kept");
-  const backed = withTrendRoute(submission, { ...(neutral as object), marketBias: "LONG", entryPrice: 100, stopPrice: 90, targetPrice: 101 } as never);
-  assert.equal(backed.supplied, false, "an analyst already on the trend's side is left to the judges");
-  const ok = withTrendRoute(submission, { ...(neutral as object), marketBias: "LONG", entryPrice: aligned.entry, stopPrice: aligned.stop, targetPrice: aligned.target } as never);
-  assert.equal(ok.supplied, false, "a standard-meeting primary is left alone");
-});
-
 test("only accepts DATA_STALE when the measured freshness line says the data is stale", async () => {
   const { coherentReason } = await import("../src/agents/llm-court.js");
   const decision = { vote: "REJECT", reasonCode: "DATA_STALE" } as never;

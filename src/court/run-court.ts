@@ -19,7 +19,7 @@ import type { JudgeCalibration } from "../outcomes/contracts.js";
 import { calibrateConfidence, type CalibrationAdjustment } from "./calibration.js";
 import { advisoryDoctrineV2, type CourtDoctrine } from "./doctrine.js";
 import type { CourtPrecedent } from "./precedent.js";
-import { computeRiskCheck, withTrendRoute, type RiskCheck } from "./risk-check.js";
+import { computeRiskCheck, type RiskCheck } from "./risk-check.js";
 import type { TrackRecord } from "./track-record.js";
 import type { AgentMemory } from "./agent-memory.js";
 
@@ -205,18 +205,13 @@ export async function runCourt(
 
   const analystCall = await provider.runAnalyst({ submission, precedents, trackRecord, agentMemory });
   trace.push(successfulTrace("ANALYST", null, analystCall));
-  const coherentCase = coherentAnalystCase(submission, {
+  const analystCase = coherentAnalystCase(submission, {
     ...analystCall.output,
     keyClaims: analystCall.output.keyClaims.map((claim) => ({
       ...claim,
       evidenceIds: knownOnly(submission, "Analyst", claim.evidenceIds, warnings),
     })),
   });
-  const trendRoute = withTrendRoute(submission, coherentCase);
-  const analystCase = trendRoute.analystCase;
-  if (trendRoute.supplied) {
-    warnings.push("The Analyst offered no plan the measured trend supports, so the court put its computed reference plan forward as the alternative route for the judges to rule on.");
-  }
   const riskCheck = computeRiskCheck(submission, analystCase);
 
   const challengerCall = await provider.runChallenger({

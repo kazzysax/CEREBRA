@@ -213,50 +213,6 @@ export function referencePlans(
   return { LONG: plan("LONG"), SHORT: plan("SHORT") };
 }
 
-// When the Analyst stands aside, or backs a side the measured trend fights, the
-// judges would never see the plan the data supports, so every ruling became a
-// rejection whatever the market did. In that case the court puts the reference
-// plan for the trend's side forward as the alternative route, which judges
-// still approve or reject on its merits.
-export function withTrendRoute(submission: CaseSubmission, analystCase: AnalystCase): { analystCase: AnalystCase; supplied: boolean } {
-  const features = marketFeaturesOf(submission);
-  const trend = features?.candles?.trend;
-  const plans = referencePlans(features, submission.riskLevel);
-  if (!features || !plans || (trend !== "UP" && trend !== "DOWN")) return { analystCase, supplied: false };
-  const budget = riskBudgets[submission.riskLevel];
-  const side = trend === "UP" ? "LONG" : "SHORT";
-  const meets = (route: RouteCheck) => planStandard(route).status === "MEETS_STANDARD";
-  const primary = checkRoute(analystCase.marketBias, {
-    entry: analystCase.entryPrice, stop: analystCase.stopPrice, target: analystCase.targetPrice,
-  }, features, budget);
-  // The Analyst already backs the trend's side: the judges rule on that plan.
-  if (analystCase.marketBias === side || meets(primary)) return { analystCase, supplied: false };
-  // Keep an alternative the Analyst already put on the trend's side, even if its
-  // levels are off budget: the judges can reject it on that. Fill only a gap.
-  if (analystCase.alternativeRoute.direction === side) return { analystCase, supplied: false };
-  const plan = plans[side];
-  const levels = features.candles!;
-  return {
-    supplied: true,
-    analystCase: {
-      ...analystCase,
-      alternativeRoute: {
-        direction: side,
-        entryPrice: plan.entryPrice,
-        stopPrice: plan.stopPrice,
-        targetPrice: plan.targetPrice,
-        timing: "Within the current bar, while price holds the entry level",
-        rationale: `Court reference plan from measured levels, offered because the measured trend is ${trend}. ${plan.note} Reward/risk ${plan.rewardRisk}, stop ${plan.stopAtr} ATR.`,
-        conditions: [
-          `Enter near ${plan.entryPrice} only while the ${trend} structure holds`,
-          `Recent ${side === "LONG" ? "low" : "high"} ${side === "LONG" ? levels.recentLow : levels.recentHigh} is the structural stop reference`,
-        ],
-        invalidation: `A move through the stop at ${plan.stopPrice} invalidates the ${side}.`,
-      },
-    },
-  };
-}
-
 export function computeRiskCheck(submission: CaseSubmission, analystCase: AnalystCase): RiskCheck {
   const features = marketFeaturesOf(submission);
   const budget = riskBudgets[submission.riskLevel];
