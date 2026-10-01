@@ -22,7 +22,8 @@ export type RouteCheck = {
 
 export type RiskCheck = {
   riskLevel: CaseSubmission["riskLevel"];
-  budget: { minRewardRisk: number; maxStopAtr: number };
+  // maxStopAtr limits the stop only; maxTargetAtr limits how far the target may be.
+  budget: { minRewardRisk: number; maxStopAtr: number; maxTargetAtr?: number };
   lastPrice: number | null;
   trend: "UP" | "DOWN" | "SIDEWAYS" | null;
   depthBias: "BID_HEAVY" | "ASK_HEAVY" | "BALANCED" | null;
@@ -245,7 +246,7 @@ export function computeRiskCheck(submission: CaseSubmission, analystCase: Analys
   const alternative = analystCase.alternativeRoute;
   return {
     riskLevel: submission.riskLevel,
-    budget,
+    budget: { ...budget, maxTargetAtr: MAX_REACHABLE_TARGET_ATR },
     lastPrice: features?.lastPrice ?? null,
     trend: features?.candles?.trend ?? null,
     depthBias: features?.depth?.bias ?? null,
