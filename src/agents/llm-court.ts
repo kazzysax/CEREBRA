@@ -147,7 +147,12 @@ const positiveCodes = new Set(["RISK_ACCEPTABLE", "EVIDENCE_SUFFICIENT", "STRATE
 
 // Keep the reason code consistent with the vote (seen live: REJECT with
 // RISK_ACCEPTABLE), so downstream readers can trust it.
-function coherentReason(decision: JudgeDecision, lens: JudgeContext["lens"]): JudgeDecision["reasonCode"] {
+export function coherentReason(decision: JudgeDecision, lens: JudgeContext["lens"], dataIsStale: boolean): JudgeDecision["reasonCode"] {
+  // A live judge cited DATA_STALE on a snapshot taken seconds earlier. Only the
+  // measured freshness line can make data stale.
+  if (decision.reasonCode === "DATA_STALE" && !dataIsStale) {
+    return lens === "RISK" ? "RISK_EXCESSIVE" : lens === "EVIDENCE" ? "EVIDENCE_INSUFFICIENT" : "STRATEGY_INCOHERENT";
+  }
   if (decision.vote === "APPROVE" && rejectCodes.has(decision.reasonCode)) return approveCodes[lens];
   if (decision.vote === "REJECT" && positiveCodes.has(decision.reasonCode)) {
     return lens === "RISK" ? "RISK_EXCESSIVE" : lens === "EVIDENCE" ? "EVIDENCE_INSUFFICIENT" : "STRATEGY_INCOHERENT";
@@ -298,7 +303,7 @@ export function createLlmCourtProvider(options: {
         output: {
           ...decision,
           alternativeVote: hasAlternative ? decision.alternativeVote : null,
-          reasonCode: coherentReason(decision, context.lens),
+          reasonCode: coherentReason(decision, context.lens, context.submission.evidence.some((item) => (item.summary ?? "").includes("DATA FRESHNESS: STALE"))),
           evidenceIds: mapIds(decision.evidenceIds, view),
         },
       };
