@@ -241,7 +241,7 @@ export function renderFeatureSummary(features: MarketFeatures): string {
   if (features.depth) {
     lines.push(`Top-of-book depth: bids ${features.depth.bidNotional} vs asks ${features.depth.askNotional} (USDT notional), imbalance ${features.depth.imbalance} -> ${features.depth.bias}.`);
   }
-  if (features.fundingRatePct !== null) lines.push(`Funding rate ${features.fundingRatePct}% per interval (positive = longs pay shorts).`);
+  if (features.fundingRatePct !== null) lines.push(`Funding rate ${features.fundingRatePct}% per interval (positive = longs pay shorts; the sign alone is not a directional signal).`);
   const c = features.candles;
   if (c) {
     lines.push(

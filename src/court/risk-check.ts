@@ -176,12 +176,14 @@ export type ReferencePlan = {
   // Distance from entry to target in ATR, so reachability is a number rather
   // than a label the models can misread.
   targetAtr: number;
-  // STRUCTURAL is the correct placement: just beyond the recent swing, inside
-  // the budget. INSIDE_RANGE means the structural stop was too far for this
-  // horizon's budget, so the stop was pulled inside the range. These are labels
-  // rather than booleans: live judges and both researchers read a
-  // `stopBeyondSwing: true` flag as a violation even beside a note saying it
-  // was the correct placement.
+  // STRUCTURAL: the stop sits just beyond the recent swing, inside the budget.
+  // INSIDE_RANGE: that swing was farther than the stop limit, so the stop was
+  // capped inside the range. This only describes where price sits in its range
+  // (near the recent high a short's swing is close and a long's is far), so it
+  // must never be read as which side has an edge: in a trend price sits near the
+  // extreme, which made the trend-fading plan always look "cleaner", and the
+  // court drifted toward counter-trend calls. Labels rather than booleans because
+  // models read `stopBeyondSwing: true` as a violation.
   stopPlacement: "STRUCTURAL" | "INSIDE_RANGE";
   // Plain-language reading of the levels.
   note: string;
@@ -219,8 +221,8 @@ export function referencePlans(
     const targetBeyondSwing = long ? target > candles.swingHigh : target < candles.swingLow;
     const note = [
       stopBeyondSwing
-        ? `Stop ${stop} sits just ${long ? "below" : "above"} the recent swing ${long ? "low" : "high"} ${swingLevel}, the correct structural place for a ${direction} stop.`
-        : `The structural stop beyond the recent swing ${long ? "low" : "high"} ${swingLevel} is too far for this horizon's budget, so stop ${stop} sits inside the recent range and is more exposed to noise.`,
+        ? `Stop ${stop} is ${round(riskDistance / atr, 2)} ATR from entry, just ${long ? "below" : "above"} the recent swing ${long ? "low" : "high"} ${swingLevel}.`
+        : `The recent swing ${long ? "low" : "high"} ${swingLevel} is farther than this horizon's stop limit allows, so stop ${stop} is ${round(riskDistance / atr, 2)} ATR from entry, inside the recent range.`,
       targetBeyondSwing
         ? `Target ${target} is ${round(rewardDistance / atr, 2)} ATR from entry and beyond the window's swing ${long ? "high" : "low"}, so reaching it needs a breakout.`
         : `Target ${target} is ${round(rewardDistance / atr, 2)} ATR from entry, within one-bar reach.`,

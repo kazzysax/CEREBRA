@@ -441,3 +441,84 @@ test("accepts an empty JSON body on action routes and still rejects malformed JS
   assert.equal(mcp.statusCode, 200, "MCP still parses its JSON body");
   await app.close();
 });
+
+test("reference plans are mirror-symmetric: an uptrend's long is a downtrend's short, so any side tilt comes from the market, not the maths", async () => {
+  const { referencePlans, marketFeaturesOf } = await import("../src/court/risk-check.js");
+  const plans = (trend: "UP" | "DOWN") => referencePlans(marketFeaturesOf({ proposal: { asset: "X", market: "usdt-futures", timeframe: "4h", direction: "EITHER", summary: "x".repeat(20) }, riskLevel: "MEDIUM", evidence: featureEvidence({ trend }) } as never), "MEDIUM")!;
+  const up = plans("UP");
+  const down = plans("DOWN");
+  for (const [withTrendUp, withTrendDown] of [[up.LONG, down.SHORT], [up.SHORT, down.LONG]] as const) {
+    assert.equal(withTrendUp.stopPlacement, withTrendDown.stopPlacement);
+    assert.equal(withTrendUp.stopAtr, withTrendDown.stopAtr);
+    assert.equal(withTrendUp.targetAtr, withTrendDown.targetAtr);
+    assert.ok(Math.abs(withTrendUp.rewardRisk - withTrendDown.rewardRisk) < 0.02, "equal up to price-precision rounding");
+  }
+});
+
+test("stop notes describe geometry and never call one side's stop the correct one", async () => {
+  const { referencePlans, marketFeaturesOf } = await import("../src/court/risk-check.js");
+  for (const trend of ["UP", "DOWN"] as const) {
+    const plans = referencePlans(marketFeaturesOf({ proposal: { asset: "X", market: "usdt-futures", timeframe: "4h", direction: "EITHER", summary: "x".repeat(20) }, riskLevel: "MEDIUM", evidence: featureEvidence({ trend }) } as never), "MEDIUM")!;
+    for (const plan of [plans.LONG, plans.SHORT]) {
+      assert.doesNotMatch(plan.note, /correct|exposed to noise|preferred/i);
+      assert.match(plan.note, /ATR from entry/);
+    }
+  }
+});
+
+test("the prompts keep side selection symmetric and treat funding as non-directional", async () => {
+  const { advisoryDoctrineV2 } = await import("../src/court/doctrine.js");
+  assert.equal(advisoryDoctrineV2.version, "v4");
+  assert.match(advisoryDoctrineV2.principles.join(" "), /Side selection is symmetric/);
+  const source = (await import("node:fs")).readFileSync(new URL("../src/agents/llm-court.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /correct, preferred stop/);
+  assert.match(source, /never choose or favor a side because its stop is STRUCTURAL/);
+  assert.match(source, /Funding is not a directional signal by itself/);
+});
+
+test("an open request that picks a side against the measured trend gets exactly one second look", async () => {
+  const { createLlmCourtProvider, fightsMeasuredTrend } = await import("../src/agents/llm-court.js");
+  assert.equal(fightsMeasuredTrend("SHORT", "UP"), true);
+  assert.equal(fightsMeasuredTrend("LONG", "DOWN"), true);
+  assert.equal(fightsMeasuredTrend("LONG", "UP"), false);
+  assert.equal(fightsMeasuredTrend("NEUTRAL", "UP"), false);
+  assert.equal(fightsMeasuredTrend("SHORT", "SIDEWAYS"), false);
+  assert.equal(fightsMeasuredTrend("SHORT", null), false);
+
+  const base = createMockCourtProvider();
+  const submission = (direction: "EITHER" | "LONG" | "SHORT", trend: "UP" | "DOWN") => ({
+    proposal: { asset: "TSLAUSDT", market: "usdt-futures", timeframe: "4h", direction, summary: "Side selection test." }, riskLevel: "MEDIUM", evidence: featureEvidence({ trend }),
+  }) as CaseSubmission;
+  const seed = (await base.runAnalyst({ submission: submission("EITHER", "UP"), precedents: [] } as never)).output;
+  const usage = { inputTokens: 100, outputTokens: 10, totalTokens: 110 };
+  const run = async (first: string, second: string | "throw", requested: "EITHER" | "LONG" | "SHORT", trend: "UP" | "DOWN") => {
+    const prompts: string[] = [];
+    const provider = createLlmCourtProvider({
+      name: "stub", model: "stub", attempts: 1,
+      async generate(request) {
+        prompts.push(request.prompt);
+        if (prompts.length === 2 && second === "throw") throw new Error("provider hiccup");
+        const bias = prompts.length === 1 ? first : second;
+        return { output: { ...seed, marketBias: bias, recommendation: bias === "NEUTRAL" ? "REJECT" : "APPROVE", thesis: "thesis from call " + prompts.length } as never, provider: "stub", model: "stub", usage };
+      },
+    });
+    const result = await provider.runAnalyst({ submission: submission(requested, trend), precedents: [] } as never);
+    return { prompts, bias: result.output.marketBias, thesis: result.output.thesis, usage: result.usage };
+  };
+
+  const fought = await run("SHORT", "NEUTRAL", "EITHER", "UP");
+  assert.equal(fought.prompts.length, 2, "one second look");
+  assert.match(fought.prompts[1]!, /"review":/);
+  assert.match(fought.prompts[1]!, /"measuredTrend":"UP"/);
+  assert.equal(fought.bias, "NEUTRAL", "the second answer is used");
+  assert.equal(fought.usage.totalTokens, 220, "both calls are counted");
+
+  assert.equal((await run("SHORT", "LONG", "EITHER", "DOWN")).prompts.length, 1, "a trend-aligned side is left alone");
+  assert.equal((await run("NEUTRAL", "LONG", "EITHER", "UP")).prompts.length, 1, "standing aside is left alone");
+  assert.equal((await run("SHORT", "NEUTRAL", "SHORT", "UP")).prompts.length, 1, "an explicit side request is judged as asked, not reviewed");
+  const kept = await run("SHORT", "throw", "EITHER", "UP");
+  assert.equal(kept.bias, "SHORT", "a failed second look keeps the first answer");
+  const insisted = await run("SHORT", "SHORT", "EITHER", "UP");
+  assert.equal(insisted.prompts.length, 2, "never a third call");
+  assert.equal(insisted.bias, "SHORT", "the model may keep its side; the judges decide");
+});

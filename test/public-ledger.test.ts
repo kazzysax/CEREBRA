@@ -225,3 +225,14 @@ test("an agent's private run can never be published through the ledger", async (
   await app.close();
 });
 
+
+test("the track record reports the side balance and how many advised trades fought the trend", async () => {
+  const ledger = createMemoryLedgerRepository();
+  const report = (direction: string, trend: string) => ({ verdict: "APPROVE", recommendation: { status: "ACTIONABLE", direction }, riskCheck: { trend } });
+  await ledger.append(append("a", { report: report("SHORT", "DOWN") }));
+  await ledger.append(append("b", { report: report("SHORT", "UP") }));
+  await ledger.append(append("c", { report: report("LONG", "UP") }));
+  await ledger.append(append("d", { report: { verdict: "REJECT", recommendation: { status: "NO_TRADE", direction: "NEUTRAL" }, riskCheck: { trend: "UP" } } }));
+  const summary = summariseTrackRecord(await ledger.listAll(), await verifyChain(ledger));
+  assert.deepEqual(summary.sideBalance, { long: 1, short: 2, withTrend: 2, againstTrend: 1 });
+});

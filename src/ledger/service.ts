@@ -126,6 +126,16 @@ export function summariseTrackRecord(rows: Array<{ entry: LedgerEntry; report: u
   const correct = count("REJECTION_CORRECT");
   const missed = count("REJECTION_MISSED");
   const rejectionsScored = scored.filter((entry) => entry.score!.kind === "REJECTION").length;
+  // Side balance of the trades the court advised, so a drift toward one side or
+  // toward fading the trend is visible instead of anecdotal.
+  const advised = ruled.flatMap((row) => {
+    const report = row.report as (ReportView & { riskCheck?: { trend?: string | null } | null }) | null;
+    const recommendation = report?.recommendation;
+    if (!recommendation || recommendation.status !== "ACTIONABLE" || (recommendation.direction !== "LONG" && recommendation.direction !== "SHORT")) return [];
+    return [{ direction: recommendation.direction, trend: report?.riskCheck?.trend ?? null }];
+  });
+  const withTrend = advised.filter((item) => (item.direction === "LONG" && item.trend === "UP") || (item.direction === "SHORT" && item.trend === "DOWN")).length;
+  const againstTrend = advised.filter((item) => (item.direction === "LONG" && item.trend === "DOWN") || (item.direction === "SHORT" && item.trend === "UP")).length;
   return {
     since: entries[0]?.ruledAt ?? null,
     rulings: ruled.length,
@@ -144,6 +154,12 @@ export function summariseTrackRecord(rows: Array<{ entry: LedgerEntry; report: u
       accuracyPct: correct + missed ? Math.round((correct / (correct + missed)) * 1000) / 10 : null,
     },
     notScorable: count("NOT_SCORABLE"),
+    sideBalance: {
+      long: advised.filter((item) => item.direction === "LONG").length,
+      short: advised.filter((item) => item.direction === "SHORT").length,
+      withTrend,
+      againstTrend,
+    },
     chain: { valid: verification.valid, headSeq: verification.headSeq, headHash: verification.headHash },
     note: "Scores are computed by code from Bitget candles after each ruling's horizon. Small samples prove nothing: read the counts, not just the percentages.",
   };

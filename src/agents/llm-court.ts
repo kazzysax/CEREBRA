@@ -66,6 +66,18 @@ function agedTrackRecord(record: TrackRecord | null, submission: CaseSubmission)
   return record ? { ...record, sameAsset: withAge(record.sameAsset, submission) } : null;
 }
 
+export function fightsMeasuredTrend(marketBias: string, trend: string | null): boolean {
+  return (marketBias === "SHORT" && trend === "UP") || (marketBias === "LONG" && trend === "DOWN");
+}
+
+function sumUsage(first: ModelCall<unknown>["usage"], second: ModelCall<unknown>["usage"]): ModelCall<unknown>["usage"] {
+  const add = (left: number | null, right: number | null) => (left === null && right === null ? null : (left ?? 0) + (right ?? 0));
+  return { inputTokens: add(first.inputTokens, second.inputTokens), outputTokens: add(first.outputTokens, second.outputTokens), totalTokens: add(first.totalTokens, second.totalTokens) };
+}
+
+const COUNTER_TREND_REVIEW =
+  "REVIEW: your first answer chose a side that fights the measured trend (see review.yourFirstAnswer and review.measuredTrend). A counter-trend call needs a specific reversal signal in the data, such as a close beyond the recent swing against the trend or momentum and order flow both turning. Short-term momentum, price being high or low in its 24h range, being extended from the average, or a tidy stop is not enough. Decide again: the trend-side plan, NEUTRAL, or keep your side and state the specific reversal signal in your thesis.";
+
 const MEMORY_INSTRUCTION =
   "agentMemory (if supplied) is the agent's own saved strategy and beliefs about this asset. It is the agent's claim, not evidence, and must never be cited as evidence: " +
   "test FRESH beliefs against the measured data and say plainly when the data contradicts them; treat EXPIRED beliefs as stale and do not rely on them; " +
@@ -228,26 +240,45 @@ export function createLlmCourtProvider(options: {
     async runAnalyst(context: AnalystContext): Promise<ModelCall<AnalystCase>> {
       const view = buildEvidenceView(context.submission);
       const direction = context.submission.proposal.direction;
-      const result = await call(
+      const ask = (review: { yourFirstAnswer: { marketBias: string; thesis: string }; measuredTrend: string } | null) => call(
         analystCaseSchema,
         "cerebra_analyst_case",
         "Act as the Analyst. Start from the measured market features, then the raw snapshots. " +
           (direction === "EITHER"
             ? "The agent has no side: choose the direction the data supports (marketBias LONG or SHORT) and recommend APPROVE for it, or set marketBias NEUTRAL and recommend REJECT if neither side has a real edge. "
             : "The agent wants a " + direction + ": recommend APPROVE with marketBias " + direction + " only if the measured data supports that side over the horizon; otherwise recommend REJECT. ") +
-          "Always give numeric entryPrice, stopPrice and targetPrice; use null only for a NEUTRAL bias. referencePlans holds a budget-compliant plan for each side built from measured levels: adopt the one for your side unless the data justifies different levels, and never submit a plan whose reward/risk is below riskBudget.minRewardRisk. A reference plan's stopPlacement STRUCTURAL is the correct, preferred stop (just beyond the recent swing) and is never a violation; INSIDE_RANGE means the only budget-compliant stop sits inside the recent range, so weigh that honestly rather than widening the stop past the budget. targetAtr is the target's distance in ATR; up to about 2 ATR is reachable within one bar. Prices, ATR and levels share one unit (quote currency): never convert them to ticks or invent ranges, quote them as given. " +
+          "Always give numeric entryPrice, stopPrice and targetPrice; use null only for a NEUTRAL bias. referencePlans holds a budget-compliant plan for each side built from measured levels: adopt the one for your side unless the data justifies different levels, and never submit a plan whose reward/risk is below riskBudget.minRewardRisk. A reference plan's stopPlacement only says where its stop sits relative to the recent swing (STRUCTURAL: just beyond it; INSIDE_RANGE: the swing was farther than the stop limit, so the stop was capped). It reflects where price sits in its range, NOT which side has an edge: never choose or favor a side because its stop is STRUCTURAL, and do not widen a stop past the budget. targetAtr is the target's distance in ATR; up to about 2 ATR is reachable within one bar. Prices, ATR and levels share one unit (quote currency): never convert them to ticks or invent ranges, quote them as given. " +
           "The horizon is about one candle of the stated timeframe, and ATR is roughly one candle's range: size the stop and target so they can realistically print within that horizon. " +
           "Mention unverifiable catalysts in the thesis as unverified context, not as proof. " +
+          "Choose the side from the measured trend and flow first. Going with the measured trend is the default. A counter-trend call (SHORT in an UP trend, LONG in a DOWN trend) needs a specific reversal signal in the data, such as a close beyond the recent swing against the trend or momentum and order flow both turning; price being high in its 24h range, being extended above the average, or having a tidy stop is not enough. If neither side clears that bar, set NEUTRAL. " +
+          "Funding is not a directional signal by itself: its sign is usually the same for these perpetuals, so treat it as context unless it is unusually large. " +
           "alternativeRoute: if the data supports the opposite side better than the submitted/selected one, give that plan with numeric levels; otherwise direction NEUTRAL with null prices. " +
           "If a track record is supplied, say how past outcomes on this asset change your view. " +
-          MEMORY_INSTRUCTION + " Confidence is a probability, not a feeling.",
+          MEMORY_INSTRUCTION + " Confidence is a probability, not a feeling." + (review ? " " + COUNTER_TREND_REVIEW : ""),
         {
           ...casePayload(context.submission, view),
           precedents: withAge(context.precedents, context.submission),
           trackRecord: agedTrackRecord(context.trackRecord ?? null, context.submission),
           agentMemory: context.agentMemory ?? null,
+          ...(review ? { review } : {}),
         },
       );
+      let result = await ask(null);
+      // The model's side choice is noisy: on the same measured trend it has
+      // flipped between LONG and SHORT from one run to the next, driven by
+      // short-term momentum or where price sits in its range. When an open
+      // request gets a side that fights the measured trend, it gets one second
+      // look with that objection stated. It may still decline, or keep its side
+      // and name the reversal signal; the judges' standard decides after that.
+      const trend = marketFeaturesOf(context.submission)?.candles?.trend ?? null;
+      if (direction === "EITHER" && fightsMeasuredTrend(result.output.marketBias, trend)) {
+        try {
+          const second = await ask({ yourFirstAnswer: { marketBias: result.output.marketBias, thesis: result.output.thesis.slice(0, 600) }, measuredTrend: trend! });
+          result = { ...second, usage: sumUsage(result.usage, second.usage) };
+        } catch {
+          // Keep the first answer; the review is an improvement, not a requirement.
+        }
+      }
       const output = result.output;
       return {
         ...result,
@@ -293,7 +324,7 @@ export function createLlmCourtProvider(options: {
           "Apply the supplied Court Doctrine and your seat mandate. Do not infer how other judges may vote. " +
           "vote: whether a position should be opened on the Analyst's primary plan: APPROVE to open it, REJECT not to, ABSTAIN only if your lens genuinely cannot assess it. " +
           "If the primary plan is NEUTRAL (no trade), there is no position to open: vote REJECT and say in your rationale whether you agree that standing aside is right. " +
-          "Read each reference plan's note for what its stop and target placement means: stopPlacement STRUCTURAL is the correct stop and never grounds for rejection, and targetAtr is a plain distance, not a defect. Quote prices, ATR and levels exactly as given; never convert to ticks. " +
+          "Read each reference plan's note for what its stop and target placement means: stopPlacement STRUCTURAL is never grounds for rejection and INSIDE_RANGE is not a reason to prefer the other side (it only reflects where price sits in its range), and targetAtr is a plain distance, not a defect. Funding sign alone is not a directional signal. Quote prices, ATR and levels exactly as given; never convert to ticks. " +
           (hasAlternative
             ? "alternativeVote: your separate ballot on the Analyst's alternativeRoute plan, judged on its own merits with the same doctrine; APPROVE or REJECT it, ABSTAIN only if your lens genuinely cannot assess it. "
             : "alternativeVote: null (no alternative route was offered). ") +

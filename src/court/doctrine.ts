@@ -16,10 +16,14 @@ export type CourtDoctrine = {
 // therefore rejected for "insufficient evidence". v2 judges the measured setup
 // on its merits and makes both approval and rejection reachable. v3 adds the
 // computed plan standard: live v2 judges rejected clean, in-budget, trend-aligned
-// plans for "weak momentum", so every ruling was a rejection in practice.
+// plans for "weak momentum", so every ruling was a rejection in practice. v4
+// adds side-neutrality: reference-plan stop labels, price position in the range
+// and the funding sign were nudging the Analyst toward fading trends (mostly
+// shorts in a rally), so a counter-trend call now needs a specific reversal
+// signal and none of those three counts as one.
 export const advisoryDoctrineV2: CourtDoctrine = {
   id: "cerebra-advisory-doctrine",
-  version: "v3",
+  version: "v4",
   title: "Judge the measured setup, bound the risk",
   principles: [
     "Cerebra gives advisory reports, never trading instructions or guarantees.",
@@ -30,6 +34,7 @@ export const advisoryDoctrineV2: CourtDoctrine = {
     "A plan that meets the computed plan standard (valid levels, within the risk budget, not fighting the measured trend) is approved unless a specific measured fact contradicts it. Modest momentum, a mid-range price or a cautious order book lower confidence; they do not by themselves justify rejection. A plan that fails the standard is rejected, naming the failed check.",
     "Only the measured data observed at the snapshot time is current. Saved beliefs, strategies, past rulings and track-record entries marked AGING or STALE describe an older market and are weak context at most; they never override the current measured data.",
     "A better entry level is optional advice, offered only when waiting or taking the other side at a specific measured level would clearly beat the plan on the table, and only if it passes the same risk standard.",
+    "Side selection is symmetric. Go with the measured trend by default; a counter-trend call needs a specific reversal signal. Where price sits in its 24h range, which reference stop is labelled STRUCTURAL, and the sign of the funding rate are not reasons to take either side.",
     "Treat the court's computed risk check as fact; do not recompute prices or ratios from raw arrays.",
     "Confidence is a probability: 0.5 means a coin flip, 0.6-0.75 a real but ordinary edge, above 0.85 only for strong agreement across trend, flow and levels.",
     "Learn from the track record: if the court was wrong on this asset or in this direction recently, say what is different now or lower confidence.",
