@@ -236,3 +236,22 @@ test("the track record reports the side balance and how many advised trades foug
   const summary = summariseTrackRecord(await ledger.listAll(), await verifyChain(ledger));
   assert.deepEqual(summary.sideBalance, { long: 1, short: 2, withTrend: 2, againstTrend: 1 });
 });
+
+test("a win decided only by drift is labelled as drift, not as a target hit", async () => {
+  const report = { recommendation: { status: "ACTIONABLE", direction: "SHORT", entryPrice: 100, stopPrice: 103, targetPrice: 94 }, riskCheck: null };
+  const entry = await entryFor(report);
+  const later = new Date("2026-10-02T10:00:00.000Z");
+  const drift = await scoreEntry(entry, report, evidenceWithPath([candle(15, 100, 100.5, 98.4, 99)]), later);
+  assert.deepEqual([drift?.result, drift?.basis], ["WIN", "DRIFT"]);
+  const hit = await scoreEntry(entry, report, evidenceWithPath([candle(15, 100, 100.5, 93.5, 94)]), later);
+  assert.deepEqual([hit?.result, hit?.basis], ["WIN", "TARGET"]);
+  const stopped = await scoreEntry(entry, report, evidenceWithPath([candle(15, 100, 103.5, 99, 102)]), later);
+  assert.deepEqual([stopped?.result, stopped?.basis], ["LOSS", "STOP"]);
+  const ledger = createMemoryLedgerRepository();
+  const a = (await ledger.append(append("d", { report })))!;
+  const b = (await ledger.append(append("t", { report })))!;
+  await ledger.setScore(a.seq, drift!);
+  await ledger.setScore(b.seq, hit!);
+  const summary = summariseTrackRecord(await ledger.listAll(), await verifyChain(ledger));
+  assert.deepEqual([summary.signals.wins, summary.signals.winsByDrift], [2, 1]);
+});

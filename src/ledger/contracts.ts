@@ -16,6 +16,9 @@ export type LedgerScore = {
   stopPrice: number | null;
   targetPrice: number | null;
   realizedReturnPct: number | null;
+  // How the result was decided: a stop or target actually touched, or only the
+  // drift in the plan's favour (or against it) by the end of the horizon.
+  basis?: "TARGET" | "STOP" | "DRIFT" | null | undefined;
   horizon: string;
   note: string;
   resolvedAt: string;

@@ -122,6 +122,9 @@ export function summariseTrackRecord(rows: Array<{ entry: LedgerEntry; report: u
   const signals = scored.filter((entry) => entry.score!.kind === "SIGNAL");
   const wins = signals.filter((entry) => entry.score!.result === "WIN").length;
   const losses = signals.filter((entry) => entry.score!.result === "LOSS").length;
+  // Older scores carry no basis field; their note says whether a level was touched.
+  const basisOf = (entry: LedgerEntry) => entry.score!.basis ?? (/Neither stop nor target hit/.test(entry.score!.note) ? "DRIFT" : "LEVEL");
+  const byDrift = (result: string) => signals.filter((entry) => entry.score!.result === result && basisOf(entry) === "DRIFT").length;
   const returns = signals.map((entry) => entry.score!.realizedReturnPct).filter((value): value is number => typeof value === "number");
   const correct = count("REJECTION_CORRECT");
   const missed = count("REJECTION_MISSED");
@@ -146,6 +149,7 @@ export function summariseTrackRecord(rows: Array<{ entry: LedgerEntry; report: u
     pendingScore: ruled.filter((row) => row.entry.score === null).length,
     signals: {
       scored: signals.length, wins, losses, flat: signals.length - wins - losses,
+      winsByDrift: byDrift("WIN"), lossesByDrift: byDrift("LOSS"),
       winRatePct: wins + losses ? Math.round((wins / (wins + losses)) * 1000) / 10 : null,
       averageReturnPct: returns.length ? Math.round((returns.reduce((sum, value) => sum + value, 0) / returns.length) * 1000) / 1000 : null,
     },

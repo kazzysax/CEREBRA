@@ -76,7 +76,7 @@ export type PublicScore = {
   kind: 'SIGNAL' | 'REJECTION' | 'NOT_SCORABLE';
   result: 'WIN' | 'LOSS' | 'FLAT' | 'REJECTION_CORRECT' | 'REJECTION_MISSED' | 'NOT_SCORABLE';
   direction: 'LONG' | 'SHORT' | null; entryPrice: number | null; stopPrice: number | null; targetPrice: number | null;
-  realizedReturnPct: number | null; horizon: string; note: string; resolvedAt: string;
+  realizedReturnPct: number | null; basis?: 'TARGET' | 'STOP' | 'DRIFT' | null; horizon: string; note: string; resolvedAt: string;
 };
 export type PublicEntry = {
   seq: number; slotKey: string; status: 'RULED' | 'MISSED'; source: 'SCHEDULED' | 'BACKFILL';
@@ -97,7 +97,7 @@ export type PublicEntry = {
 };
 export type PublicTrackRecord = {
   since: string | null; rulings: number; missedSlots: number; approved: number; rejected: number; actionable: number; pendingScore: number;
-  signals: { scored: number; wins: number; losses: number; flat: number; winRatePct: number | null; averageReturnPct: number | null };
+  signals: { scored: number; wins: number; losses: number; flat: number; winsByDrift: number; lossesByDrift: number; winRatePct: number | null; averageReturnPct: number | null };
   rejections: { scored: number; correct: number; missed: number; accuracyPct: number | null };
   notScorable: number;
   chain: { valid: boolean; headSeq: number | null; headHash: string | null };

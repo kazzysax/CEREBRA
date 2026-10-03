@@ -26,13 +26,18 @@ function voteLine(entry: PublicEntry) {
   return tally.approve >= 2 ? `${tally.approve} of 3 judges approved, but the plan was not actionable` : `${tally.reject} of 3 judges rejected it`;
 }
 
+// A win or loss with no stop or target touched is only drift at the horizon's end; say so.
+function driftOnly(score: PublicScore) {
+  return score.basis === 'DRIFT' || (!score.basis && /Neither stop nor target hit/.test(score.note));
+}
+
 function scoreLine(entry: PublicEntry, score: PublicScore | null) {
   if (entry.status === 'MISSED') return { tone: 'muted', text: 'No ruling was produced for this slot, and the record says so.' };
   if (!score) return { tone: 'muted', text: `Pending: scored from Bitget candles once the ${entry.timeframe?.toUpperCase() ?? '4H'} horizon has passed.` };
   const pct = score.realizedReturnPct === null ? '' : ` (${score.realizedReturnPct > 0 ? '+' : ''}${score.realizedReturnPct}% on the plan)`;
   switch (score.result) {
-    case 'WIN': return { tone: 'good', text: `Win${pct}. ${score.note}` };
-    case 'LOSS': return { tone: 'bad', text: `Loss${pct}. ${score.note}` };
+    case 'WIN': return { tone: 'good', text: `${driftOnly(score) ? 'Win by drift' : 'Win'}${pct}. ${score.note}` };
+    case 'LOSS': return { tone: 'bad', text: `${driftOnly(score) ? 'Loss by drift' : 'Loss'}${pct}. ${score.note}` };
     case 'REJECTION_CORRECT': return { tone: 'good', text: `Rejection was right: the declined plan would have been stopped out${pct}. ${score.note}` };
     case 'REJECTION_MISSED': return { tone: 'bad', text: `Rejection missed a winner: the declined plan would have hit its target${pct}. ${score.note}` };
     case 'FLAT': return { tone: 'muted', text: `Flat${pct}. ${score.note}` };
@@ -87,7 +92,7 @@ export function TrackStats({ record, verification }: { record: PublicTrackRecord
   return (
     <div className="record-stats" aria-label="Track record">
       <div><span>Rulings</span><strong>{record.rulings}</strong><small>{record.approved} approved · {record.rejected} rejected{record.missedSlots ? ` · ${record.missedSlots} missed` : ''}</small></div>
-      <div><span>Advised trades scored</span><strong>{record.signals.scored ? `${record.signals.wins}W · ${record.signals.losses}L` : '—'}</strong><small>{record.signals.winRatePct !== null ? `${record.signals.winRatePct}% win rate` : 'none resolved yet'}{record.signals.averageReturnPct !== null ? ` · avg ${record.signals.averageReturnPct}%` : ''}</small></div>
+      <div><span>Advised trades scored</span><strong>{record.signals.scored ? `${record.signals.wins}W · ${record.signals.losses}L` : '—'}</strong><small>{record.signals.winRatePct !== null ? `${record.signals.winRatePct}% win rate${record.signals.winsByDrift + record.signals.lossesByDrift ? ` · ${record.signals.winsByDrift + record.signals.lossesByDrift} of them decided by drift, no level touched` : ''}` : 'none resolved yet'}{record.signals.averageReturnPct !== null ? ` · avg ${record.signals.averageReturnPct}%` : ''}</small></div>
       <div><span>Rejections scored</span><strong>{record.rejections.correct + record.rejections.missed ? `${record.rejections.correct} right · ${record.rejections.missed} missed` : '—'}</strong><small>{record.rejections.accuracyPct !== null ? `${record.rejections.accuracyPct}% right` : 'none resolved yet'}</small></div>
       <div className={chainOk ? 'is-ok' : 'is-bad'}><span>Record integrity</span><strong>{chainOk ? <><ShieldCheck /> Chain verified</> : <><TriangleAlert /> Chain broken</>}</strong><small>{record.chain.headHash ? `head ${shortHash(record.chain.headHash)}` : 'no entries yet'}</small></div>
     </div>

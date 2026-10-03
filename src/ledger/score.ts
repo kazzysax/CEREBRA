@@ -85,8 +85,9 @@ export async function scoreEntry(
   const result: LedgerScore["result"] = kind === "SIGNAL"
     ? resolution.thesisOutcome === "CONFIRMED" ? "WIN" : resolution.thesisOutcome === "REFUTED" ? "LOSS" : "FLAT"
     : resolution.thesisOutcome === "REFUTED" ? "REJECTION_CORRECT" : resolution.thesisOutcome === "CONFIRMED" ? "REJECTION_MISSED" : "FLAT";
+  const basis: LedgerScore["basis"] = /^Target /.test(resolution.note) ? "TARGET" : /^Stop /.test(resolution.note) ? "STOP" : resolution.thesisOutcome === "INCONCLUSIVE" ? null : "DRIFT";
   return {
-    kind, result, thesisOutcome: resolution.thesisOutcome, direction,
+    kind, result, thesisOutcome: resolution.thesisOutcome, basis, direction,
     entryPrice, stopPrice, targetPrice, realizedReturnPct: resolution.realizedReturnPct,
     horizon: horizon.label,
     note: (kind === "REJECTION" ? "Counterfactual on the plan the court declined. " : "") + resolution.note,
