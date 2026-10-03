@@ -71,6 +71,40 @@ export type CourtRunRecord = {
   startedAt: string; completedAt: string | null; result: CourtRunResult | null; error: string | null;
 };
 
+export type PublicJudge = { judgeId: string; lens: string; vote: 'APPROVE' | 'REJECT' | 'ABSTAIN' | null; confidence: number | null; reasonCode: string | null; rationale: string };
+export type PublicScore = {
+  kind: 'SIGNAL' | 'REJECTION' | 'NOT_SCORABLE';
+  result: 'WIN' | 'LOSS' | 'FLAT' | 'REJECTION_CORRECT' | 'REJECTION_MISSED' | 'NOT_SCORABLE';
+  direction: 'LONG' | 'SHORT' | null; entryPrice: number | null; stopPrice: number | null; targetPrice: number | null;
+  realizedReturnPct: number | null; horizon: string; note: string; resolvedAt: string;
+};
+export type PublicEntry = {
+  seq: number; slotKey: string; status: 'RULED' | 'MISSED'; source: 'SCHEDULED' | 'BACKFILL';
+  asset: string | null; timeframe: string | null; riskLevel: string | null; model: string | null;
+  ruledAt: string; missedReason: string | null; thesis: string | null; doctrineVersion: string | null;
+  verdict: 'APPROVE' | 'REJECT' | null; panelStatus: string | null;
+  tally: { approve: number; reject: number; abstain: number; unavailable: number } | null;
+  alternativeTally: { approve: number; reject: number; abstain: number } | null;
+  recommendation: {
+    status: 'ACTIONABLE' | 'WAIT' | 'NO_TRADE'; direction: 'LONG' | 'SHORT' | 'NEUTRAL'; source: string | null;
+    entryPrice: number | null; stopPrice: number | null; targetPrice: number | null; rewardRisk: number | null; rationale: string;
+  } | null;
+  betterLevel: { direction: 'LONG' | 'SHORT'; entryPrice: number; instruction: string } | null;
+  judges: PublicJudge[]; dataFreshness: string | null; evidenceObservedAt: string | null;
+  score: PublicScore | null;
+  hashes: { reportDigest: string | null; entryHash: string; prevHash: string };
+  createdAt: string;
+};
+export type PublicTrackRecord = {
+  since: string | null; rulings: number; missedSlots: number; approved: number; rejected: number; actionable: number; pendingScore: number;
+  signals: { scored: number; wins: number; losses: number; flat: number; winRatePct: number | null; averageReturnPct: number | null };
+  rejections: { scored: number; correct: number; missed: number; accuracyPct: number | null };
+  notScorable: number;
+  chain: { valid: boolean; headSeq: number | null; headHash: string | null };
+  note: string;
+};
+export type PublicVerification = { valid: boolean; checked: number; headSeq: number | null; headHash: string | null; firstBrokenSeq: number | null; problem: string | null };
+
 const agentKeyStorage = 'cerebra.agent-key.v1';
 
 export function getSessionAgentKey() {

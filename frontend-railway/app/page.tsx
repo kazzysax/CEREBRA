@@ -3,12 +3,13 @@
 
 import { SyntheticEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Activity, ArrowDownRight, ArrowRight, BookOpen, Cable, Check, CircleAlert, Clipboard, Code2, Database, Download, Fingerprint, Gavel, History, LoaderCircle, PanelsTopLeft, Plus, Radio, RefreshCw, Scale, Search, X } from 'lucide-react';
+import { ShieldCheck, Activity, ArrowDownRight, ArrowRight, BookOpen, Cable, Check, CircleAlert, Clipboard, Code2, Database, Download, Fingerprint, Gavel, History, LoaderCircle, PanelsTopLeft, Plus, Radio, RefreshCw, Scale, Search, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { PublicRecord, RecordLink } from '@/components/public-record';
 import { BrandMark, CourtProgress, type CourtSubStage, Dissent, JudgeCard } from '@/components/court-panel';
 import { cerebraApi, getSessionAgentKey, shortDate, type CaseRecord, type CourtJob, type CourtRunRecord, type CourtRunResult, type Direction, type RulingReport, type RunPhase } from '@/lib/cerebra';
 
@@ -286,6 +287,7 @@ export default function Home() {
           <div className="command-nav__meta" aria-label="System status"><span>PERSISTENT INTELLIGENCE / LOOP LEARNING</span><span className={connected ? 'is-connected' : ''}>{connected ? 'MARKET FEED LIVE' : 'CONNECT AN AGENT'}</span></div>
           <div className="command-nav__actions">
             <a className="command-control" aria-label="Open agent case history" title="Open agent case history" href="/agents"><Search /></a>
+            <a className="command-control" aria-label="Open the public record" title="Open the public record" href="/record"><ShieldCheck /></a>
             <a className="command-control" aria-label="Open API and MCP documentation" title="Open API and MCP documentation" href="/docs/agents"><BookOpen /></a>
             <a className="command-control" aria-label="Open agent login" title="Open agent login" href="/agents"><Fingerprint /></a>
             <a className="command-control command-control--history" aria-label="Open agent case history" title="Open agent case history" href="/agents"><History /></a>
@@ -434,6 +436,15 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="record-section" id="record" aria-labelledby="record-title">
+        <div className="record-section__inner">
+          <span className="record-kicker">PUBLIC RECORD / VERIFIABLE</span>
+          <h2 id="record-title">Our last five rulings.<br /><span>Public, and scored.</span></h2>
+          <p className="record-section__lede">Not a demo. These are real court runs on live Bitget data, scored against the market once their horizon has passed. The first five were run earlier and added to the record afterwards, and are marked as backfilled; every new ruling is published automatically. Wins, misses and rejections all stay on the record.</p>
+          <PublicRecord limit={5} expandFirst />
+          <RecordLink />
+        </div>
+      </section>
       <section className="agent-connect-section" id="agent-connect" aria-labelledby="agent-connect-title">
         <div className="agent-connect-section__inner">
           <div className="chapter-label"><span>CONNECT / 01</span><i /><strong>AGENT ACCESS</strong></div>

@@ -24,6 +24,11 @@ import { registerJobRoutes } from "./jobs/register-routes.js";
 import { createCourtJobWorker } from "./jobs/worker.js";
 import { registerOutcomeRoutes } from "./outcomes/register-routes.js";
 import { createAnonymousRateLimit } from "./security/anonymous-rate-limit.js";
+import type { LedgerRepository } from "./ledger/contracts.js";
+import { createMemoryLedgerRepository } from "./ledger/memory-repository.js";
+import { registerLedgerRoutes } from "./ledger/register-routes.js";
+import { createLedgerScheduler, parseSlots } from "./ledger/scheduler.js";
+import { createLedgerScorerLoop } from "./ledger/score.js";
 import { createOutcomeResolverLoop } from "./outcomes/auto-resolver.js";
 
 export async function buildApp(options: {
@@ -35,6 +40,14 @@ export async function buildApp(options: {
   identityRepository?: AgentIdentityRepository | undefined;
   memoryRepository?: AgentMemoryRepository | undefined;
   jobRepository?: CourtJobRepository | undefined;
+  ledgerRepository?: LedgerRepository | undefined;
+  ledger?: {
+    enabled: boolean;
+    slotsUtc?: string | undefined;
+    scheduleStart?: string | undefined;
+    adminToken?: string | undefined;
+    sweepMs?: number | undefined;
+  } | undefined;
   jobs?: {
     enabled: boolean;
     pollIntervalMs?: number | undefined;
@@ -77,6 +90,7 @@ export async function buildApp(options: {
   const identityRepository = options.identityRepository ?? createMemoryAgentIdentityRepository();
   const memoryRepository = options.memoryRepository ?? createMemoryAgentMemoryRepository();
   const jobRepository = options.jobRepository ?? createMemoryCourtJobRepository();
+  const ledgerRepository = options.ledgerRepository ?? createMemoryLedgerRepository();
   const auth = createAgentAuth({
     repository: identityRepository,
     mode: options.auth?.mode ?? "open",
@@ -109,10 +123,29 @@ export async function buildApp(options: {
     log: (message, detail) => app.log.warn({ detail }, message),
   });
 
+  const ledgerScheduler = createLedgerScheduler({
+    ledger: ledgerRepository,
+    cases: repository,
+    evidenceProvider,
+    courtProvider,
+    memory: memoryRepository,
+    slots: parseSlots(options.ledger?.slotsUtc ?? "14:35,17:05,19:35"),
+    scheduleStart: options.ledger?.scheduleStart ? new Date(options.ledger.scheduleStart) : null,
+    log: (message, detail) => app.log.warn({ detail }, message),
+  });
+  const ledgerScorer = createLedgerScorerLoop({
+    ledger: ledgerRepository,
+    evidenceProvider,
+    intervalMs: options.ledger?.sweepMs,
+    log: (message, detail) => app.log.warn({ detail }, message),
+  });
+
   app.addHook("onClose", async () => {
+    await ledgerScheduler.stop();
+    await ledgerScorer.stop();
     await outcomeResolver.stop();
     await jobWorker.stop();
-    await Promise.all([repository.close(), identityRepository.close(), memoryRepository.close(), jobRepository.close()]);
+    await Promise.all([repository.close(), identityRepository.close(), memoryRepository.close(), jobRepository.close(), ledgerRepository.close()]);
   });
 
   app.get("/health/live", async () => ({ status: "ok" }));
@@ -135,6 +168,12 @@ export async function buildApp(options: {
       votingRule: "equal-weight simple majority",
     },
   }));
+  registerLedgerRoutes(app, {
+    ledger: ledgerRepository,
+    cases: repository,
+    adminToken: options.ledger?.adminToken,
+    tick: ledgerScheduler.tick,
+  });
   registerAgentRoutes(app, auth);
   registerCaseRoutes(app, { repository, evidenceProvider, courtProvider, memory: memoryRepository, auth, anonymousRateLimit: createAnonymousRateLimit(options.anonymousRateLimit) });
   registerMemoryRoutes(app, { repository: memoryRepository, auth });
@@ -192,6 +231,10 @@ export async function buildApp(options: {
   if (options.jobs?.enabled) {
     jobWorker.start();
     outcomeResolver.start();
+  }
+  if (options.ledger?.enabled) {
+    ledgerScorer.start();
+    ledgerScheduler.start();
   }
 
   return app;

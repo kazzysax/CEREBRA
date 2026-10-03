@@ -26,6 +26,11 @@ const configSchema = z.object({
   CLAUDE_MODEL: z.string().min(1).default("claude-sonnet-5"),
   CLAUDE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(60_000),
   CLAUDE_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
+  // Public ledger: three scheduled court runs a day, published on the site.
+  PUBLIC_LEDGER_ENABLED: z.string().default("false").transform((value) => value === "true"),
+  LEDGER_SLOTS_UTC: z.string().default("14:35,17:05,19:35"),
+  LEDGER_SCHEDULE_START: z.string().datetime().optional(),
+  LEDGER_ADMIN_TOKEN: z.string().min(32).optional(),
 });
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
@@ -54,6 +59,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       claudeModel: parsed.CLAUDE_MODEL,
       claudeTimeoutMs: parsed.CLAUDE_TIMEOUT_MS,
       claudeMaxRetries: parsed.CLAUDE_MAX_RETRIES,
+    },
+    ledger: {
+      enabled: parsed.PUBLIC_LEDGER_ENABLED,
+      slotsUtc: parsed.LEDGER_SLOTS_UTC,
+      scheduleStart: parsed.LEDGER_SCHEDULE_START,
+      adminToken: parsed.LEDGER_ADMIN_TOKEN,
     },
     evidenceProvider: parsed.EVIDENCE_PROVIDER,
     storage: {

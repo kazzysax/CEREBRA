@@ -8,6 +8,7 @@ import { createConfiguredCaseRepository } from "./storage/repository-factory.js"
 import { createConfiguredAgentIdentityRepository } from "./identity/repository-factory.js";
 import { createConfiguredAgentMemoryRepository } from "./memory/repository-factory.js";
 import { createConfiguredCourtJobRepository } from "./jobs/repository-factory.js";
+import { createConfiguredLedgerRepository } from "./ledger/repository-factory.js";
 import { runMigrations } from "./storage/run-migrations.js";
 
 const config = loadConfig();
@@ -25,6 +26,7 @@ const repository = createConfiguredCaseRepository(config.storage);
 const identityRepository = createConfiguredAgentIdentityRepository(config.storage);
 const memoryRepository = createConfiguredAgentMemoryRepository(config.storage);
 const jobRepository = createConfiguredCourtJobRepository(config.storage);
+const ledgerRepository = createConfiguredLedgerRepository(config.storage);
 const app = await buildApp({
   host: config.host,
   allowedHosts: config.allowedHosts,
@@ -34,6 +36,8 @@ const app = await buildApp({
   identityRepository,
   memoryRepository,
   jobRepository,
+  ledgerRepository,
+  ledger: config.ledger,
   auth: config.auth,
   jobs: config.jobs,
 });
